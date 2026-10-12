@@ -22,12 +22,32 @@ Dostupnosť nástrojov a PDF enginov sa zobrazuje v pravom hornom rohu rozhrania
 
 ## Spustenie
 
-```bash
-# priamo z repozitára
-./qgui.sh ~/Dokumenty/praca          # Linux / macOS
-qgui.bat C:\Users\ja\Dokumenty\praca  # Windows
+Najprv si stiahni repozitár (kým nie je PR zlúčený, z vetvy `claude/bold-lamport-ag0660`):
 
-# alebo inštalácia ako príkaz
+```bash
+git clone -b claude/bold-lamport-ag0660 https://github.com/mirecky/quarto_PDF_autorender.git
+cd quarto_PDF_autorender
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\qgui.ps1 C:\Users\ja\Documents\praca
+# ak PowerShell blokuje skripty:
+powershell -ExecutionPolicy Bypass -File .\qgui.ps1 C:\Users\ja\Documents\praca
+# alternatívne (PowerShell aj cmd):
+.\qgui.bat C:\Users\ja\Documents\praca
+```
+
+**Linux / macOS:**
+
+```bash
+./qgui.sh ~/Dokumenty/praca
+```
+
+**Ako príkaz `qgui` (všetky systémy):**
+
+```bash
 pip install -e .
 qgui ~/Dokumenty/praca --port 8765
 ```
