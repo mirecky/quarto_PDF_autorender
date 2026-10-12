@@ -52,6 +52,14 @@ Dvojklik na zástupcu spustí server v minimalizovanom okne a otvorí prehliada�
 zatvorením tohto okna sa aplikácia ukončí. Pri obsadenom porte sa automaticky
 použije nasledujúci voľný.
 
+Zástupca používa ikonu `assets/qgui.ico`; vlastnú ikonu nastavíš parametrom
+`-Icon "C:\cesta\ikona.ico"`. Konverzia SVG na ICO (napr. cez ImageMagick,
+`winget install ImageMagick.ImageMagick`):
+
+```powershell
+magick ikona.svg -background none -define icon:auto-resize=256,128,64,48,32,24,16 ikona.ico
+```
+
 **Linux / macOS:**
 
 ```bash
