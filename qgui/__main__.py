@@ -51,9 +51,17 @@ def main() -> None:
     if not root.is_dir():
         ap.error(f"Priečinok neexistuje: {root}\n"
                  f"Tip: spusti qgui bez cesty a priečinok vyber v dialógovom okne.")
-    srv = make_server(root, args.host, args.port)
+    srv = None
+    for port in range(args.port, args.port + 20):  # obsadený port → skúsiť ďalší
+        try:
+            srv = make_server(root, args.host, port)
+            break
+        except OSError:
+            continue
+    if srv is None:
+        ap.error(f"Porty {args.port}–{args.port + 19} sú obsadené.")
     url = f"http://{args.host}:{srv.server_address[1]}/"
-    print(f"qgui beží na {url}  (pracovný priečinok: {root})\nUkončenie: Ctrl+C")
+    print(f"qgui beží na {url}  (pracovný priečinok: {root})\nUkončenie: Ctrl+C alebo zatvorenie tohto okna")
     if not args.no_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:

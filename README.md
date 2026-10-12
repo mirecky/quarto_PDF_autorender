@@ -40,6 +40,18 @@ powershell -ExecutionPolicy Bypass -File .\qgui.ps1 C:\Users\ja\Documents\praca
 .\qgui.bat C:\Users\ja\Documents\praca
 ```
 
+**Zástupca na ploche (Windows):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\vytvor-zastupcu.ps1
+# s pevne zvoleným priečinkom a vlastným názvom:
+powershell -ExecutionPolicy Bypass -File .\vytvor-zastupcu.ps1 -Name "Diplomovka" -Folder "C:\Users\Admin\Documents\diplomovka"
+```
+
+Dvojklik na zástupcu spustí server v minimalizovanom okne a otvorí prehliadač;
+zatvorením tohto okna sa aplikácia ukončí. Pri obsadenom porte sa automaticky
+použije nasledujúci voľný.
+
 **Linux / macOS:**
 
 ```bash

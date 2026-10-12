@@ -1,4 +1,4 @@
-# Spustenie Quarto Studio v PowerShelli:  .\qgui.ps1 [PRIEČINOK]
+﻿# Spustenie Quarto Studio v PowerShelli:  .\qgui.ps1 [PRIEČINOK]
 # Ak PowerShell blokuje skripty: powershell -ExecutionPolicy Bypass -File .\qgui.ps1 C:\cesta
 $env:PYTHONPATH = "$PSScriptRoot;$env:PYTHONPATH"
 if (Get-Command py -ErrorAction SilentlyContinue) {
