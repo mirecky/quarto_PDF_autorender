@@ -11,9 +11,13 @@ param(
 
 $desktop = [Environment]::GetFolderPath("Desktop")   # funguje aj pri ploche v OneDrive
 $shell = New-Object -ComObject WScript.Shell
-$lnk = $shell.CreateShortcut((Join-Path $desktop "$Name.lnk"))
+$path = Join-Path $desktop "$Name.lnk"
+# Existujúci zástupca (napr. z Chromu/Edge) by si ponechal staré parametre – vytvoriť ho nanovo.
+if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }
+$lnk = $shell.CreateShortcut($path)
 $lnk.TargetPath = Join-Path $PSScriptRoot "qgui.bat"
 $lnk.WorkingDirectory = $PSScriptRoot
+$lnk.Arguments = ""
 if ($Folder) {
     $full = (Resolve-Path -LiteralPath $Folder -ErrorAction Stop).Path
     $lnk.Arguments = "`"$full`""
