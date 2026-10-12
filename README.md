@@ -32,6 +32,7 @@ cd quarto_PDF_autorender
 **Windows (PowerShell):**
 
 ```powershell
+.\qgui.ps1            # bez cesty: otvorí sa okno na výber priečinka
 .\qgui.ps1 C:\Users\ja\Documents\praca
 # ak PowerShell blokuje skripty:
 powershell -ExecutionPolicy Bypass -File .\qgui.ps1 C:\Users\ja\Documents\praca
@@ -53,7 +54,8 @@ qgui ~/Dokumenty/praca --port 8765
 ```
 
 Prehliadač sa otvorí automaticky (`--no-browser` to potlačí). Argument určuje
-**pracovný priečinok** – aplikácia pristupuje výhradne k súborom v ňom.
+**pracovný priečinok** – aplikácia pristupuje výhradne k súborom v ňom. Ak ho
+neuvedieš, zobrazí sa dialóg na jeho výber.
 
 ## Funkcie
 
