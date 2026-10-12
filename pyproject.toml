@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qgui"
+version = "1.0.0"
+description = "Grafické rozhranie na úpravu, náhľad a renderovanie Markdown/Quarto dokumentov (Quarto, Pandoc)."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+qgui = "qgui.__main__:main"
+
+[tool.setuptools]
+packages = ["qgui"]
+
+[tool.setuptools.package-data]
+qgui = ["static/*", "static/**/*"]

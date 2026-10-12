@@ -1,0 +1,58 @@
+---
+title: "Ukážkový dokument"
+subtitle: "Test renderovania cez Quarto Studio"
+author: "Autor Dokumentu"
+date: today
+lang: sk
+bibliography: zdroje.bib
+format:
+  pdf:
+    toc: true
+    number-sections: true
+    papersize: a4
+    geometry: margin=2.5cm
+  html:
+    toc: true
+  typst:
+    toc: true
+    number-sections: true
+    papersize: a4
+---
+
+# Úvod {#sec-uvod}
+
+Tento dokument slúži na overenie renderovacieho reťazca. Obsahuje nadpisy,
+zoznamy, tabuľku, matematiku, citácie a Quarto callout.
+
+Podľa @knuth1984 je literárne programovanie spôsob, ako spojiť text a kód.
+
+# Metodika
+
+- Prvá položka
+- Druhá položka s **tučným** a *kurzívou*
+
+Rovnica @eq-energia vyjadruje ekvivalenciu hmotnosti a energie:
+
+$$
+E = mc^2
+$$ {#eq-energia}
+
+| Veličina | Jednotka |
+|:---------|---------:|
+| dĺžka    | m        |
+| čas      | s        |
+
+: Základné veličiny {#tbl-veliciny}
+
+::: {.callout-note}
+## Poznámka
+Callouty sa plne zobrazia iba v Quarto náhľade alebo renderi.
+:::
+
+# Záver
+
+Pozri aj @sec-uvod a @tbl-veliciny.[^1]
+
+[^1]: Poznámka pod čiarou.
+
+# Literatúra {.unnumbered}

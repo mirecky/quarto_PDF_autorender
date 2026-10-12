@@ -1,0 +1,11 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+.venv/
+_output/
+.quarto/
+*_files/
+.qgui-preview-*
+examples/.qgui.json
+examples/*.typ
