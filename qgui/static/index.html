@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quarto Studio</title>
+<link rel="icon" type="image/svg+xml" href="/static/quarto.svg">
+<link rel="stylesheet" href="/static/vendor/codemirror/lib/codemirror.css">
+<link rel="stylesheet" href="/static/vendor/codemirror/addon/dialog/dialog.css">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header id="topbar">
+  <div class="brand">Quarto&nbsp;Studio</div>
+  <div class="group">
+    <button id="btn-save" title="Uložiť (Ctrl+S)">Uložiť</button>
+    <span id="dirty" class="dirty" hidden>●</span>
+  </div>
+  <div class="group">
+    <label class="lbl" for="profile">Profil</label>
+    <select id="profile"></select>
+    <button id="btn-settings" title="Nastavenia renderu">⚙ Nastavenia</button>
+    <button id="btn-render" class="primary" title="Renderovať (Ctrl+Enter)">▶ Renderovať</button>
+  </div>
+  <div class="group">
+    <label class="chk" title="Po každom uložení automaticky renderovať"><input type="checkbox" id="auto-render"> auto-render</label>
+    <label class="chk" title="Živý náhľad počas písania"><input type="checkbox" id="live-preview" checked> živý náhľad</label>
+    <select id="preview-mode" title="Spôsob náhľadu">
+      <option value="pandoc">náhľad: rýchly (Pandoc)</option>
+      <option value="quarto">náhľad: plný (Quarto HTML)</option>
+    </select>
+  </div>
+  <div class="spacer"></div>
+  <div id="tools" class="tools"></div>
+  <button id="btn-quit" title="Ukončiť Quarto Studio (zastaví lokálny server)">⏻ Ukončiť</button>
+</header>
+
+<main id="layout">
+  <aside id="sidebar">
+    <div class="side-head">
+      <span>Súbory</span>
+      <span>
+        <button class="icon" id="btn-new" title="Nový súbor">＋</button>
+        <button class="icon" id="btn-newdir" title="Nový priečinok">📁</button>
+        <button class="icon" id="btn-refresh" title="Obnoviť">⟳</button>
+      </span>
+    </div>
+    <label class="chk small"><input type="checkbox" id="only-docs" checked> iba dokumenty</label>
+    <div id="tree"></div>
+  </aside>
+  <div class="gutter" data-target="sidebar"></div>
+
+  <section id="editor-pane">
+    <div class="pane-head">
+      <span id="current-file">— žiadny súbor —</span>
+      <div class="fmt-bar" id="fmt-bar">
+        <button data-fmt="h1" title="Nadpis">H</button>
+        <button data-fmt="bold" title="Tučné (Ctrl+B)"><b>B</b></button>
+        <button data-fmt="italic" title="Kurzíva (Ctrl+I)"><i>I</i></button>
+        <button data-fmt="code" title="Kód"><code>`</code></button>
+        <button data-fmt="ul" title="Zoznam">•</button>
+        <button data-fmt="ol" title="Číslovaný zoznam">1.</button>
+        <button data-fmt="quote" title="Citát">❝</button>
+        <button data-fmt="link" title="Odkaz">🔗</button>
+        <button data-fmt="image" title="Obrázok">🖼</button>
+        <button data-fmt="table" title="Tabuľka">▦</button>
+        <button data-fmt="math" title="Rovnica">∑</button>
+        <button data-fmt="cite" title="Citácia">[@]</button>
+        <button data-fmt="footnote" title="Poznámka pod čiarou">¹</button>
+        <button data-fmt="callout" title="Quarto callout">!</button>
+        <button data-fmt="chunk" title="Blok kódu (Quarto)">{}</button>
+        <button data-fmt="pagebreak" title="Nová strana">⤓</button>
+      </div>
+    </div>
+    <div id="editor-host"></div>
+  </section>
+  <div class="gutter" data-target="editor-pane"></div>
+
+  <section id="right-pane">
+    <div class="pane-head tabs">
+      <button class="tab active" data-tab="preview">Náhľad</button>
+      <button class="tab" data-tab="output">Výstup</button>
+      <button class="tab" data-tab="log">Log <span id="log-badge" class="badge" hidden></span></button>
+      <div class="spacer"></div>
+      <select id="output-select" hidden></select>
+      <a id="btn-open-output" class="btnlink" target="_blank" hidden>Otvoriť ↗</a>
+      <a id="btn-download" class="btnlink" hidden>Stiahnuť</a>
+    </div>
+    <div class="tab-body" id="tab-preview"><iframe id="preview-frame" title="Náhľad"></iframe></div>
+    <div class="tab-body" id="tab-output" hidden>
+      <iframe id="output-frame" title="Výstup"></iframe>
+      <div id="output-empty" class="empty">Zatiaľ nič nebolo renderované.<br>Stlač <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</div>
+    </div>
+    <div class="tab-body" id="tab-log" hidden><pre id="log"></pre></div>
+  </section>
+</main>
+
+<footer id="status"><span id="status-text">Pripravené.</span><span id="status-root"></span></footer>
+
+<dialog id="settings-dlg">
+  <form method="dialog" id="settings-form">
+    <h2>Nastavenia renderu</h2>
+    <div class="row">
+      <label>Profil
+        <select id="s-profile"></select>
+      </label>
+      <button type="button" id="s-new-profile">Nový</button>
+      <button type="button" id="s-dup-profile">Duplikovať</button>
+      <button type="button" id="s-rename-profile">Premenovať</button>
+      <button type="button" id="s-del-profile" class="danger">Zmazať</button>
+    </div>
+    <p class="hint">Prázdne pole / nezaškrtnuté = použije sa hodnota z YAML hlavičky dokumentu.</p>
+    <div class="grid">
+      <label>Nástroj
+        <select name="engine"><option value="quarto">Quarto</option><option value="pandoc">Pandoc</option></select>
+      </label>
+      <label>Výstupný formát
+        <select name="format">
+          <option value="">(podľa YAML)</option>
+          <option value="pdf">PDF</option>
+          <option value="typst">PDF cez Typst</option>
+          <option value="beamer">Beamer (PDF prezentácia)</option>
+          <option value="html">HTML</option>
+          <option value="revealjs">Reveal.js prezentácia</option>
+          <option value="docx">Word (DOCX)</option>
+          <option value="odt">OpenDocument (ODT)</option>
+          <option value="pptx">PowerPoint (PPTX)</option>
+          <option value="epub">EPUB</option>
+          <option value="latex">LaTeX (.tex)</option>
+          <option value="gfm">GitHub Markdown</option>
+        </select>
+      </label>
+      <label>PDF engine
+        <select name="pdf_engine">
+          <option value="">(predvolený)</option>
+          <option>xelatex</option><option>lualatex</option><option>pdflatex</option>
+          <option>tectonic</option><option>typst</option><option>weasyprint</option><option>wkhtmltopdf</option>
+        </select>
+      </label>
+      <label>Výstupný priečinok <input name="output_dir" placeholder="_output (relatívne k súboru)"></label>
+      <label class="chk"><input type="checkbox" name="toc"> Obsah (TOC)</label>
+      <label>Hĺbka obsahu <input name="toc_depth" type="number" min="1" max="6" placeholder="3"></label>
+      <label class="chk"><input type="checkbox" name="number_sections"> Číslovanie kapitol</label>
+      <label class="chk"><input type="checkbox" name="citeproc"> Citácie (citeproc)</label>
+      <label>Bibliografia (.bib) <input name="bibliography" placeholder="references.bib"></label>
+      <label>Citačný štýl (.csl) <input name="csl" placeholder="iso690-author-date-sk.csl"></label>
+      <label>Jazyk <input name="lang" placeholder="sk"></label>
+      <label>Veľkosť papiera <input name="papersize" placeholder="a4" list="dl-paper"></label>
+      <label>Veľkosť písma <input name="fontsize" placeholder="12pt" list="dl-font"></label>
+      <label>Okraje (geometry) <input name="geometry" placeholder="margin=2.5cm"></label>
+      <label>Hlavné písmo <input name="mainfont" placeholder="Times New Roman"></label>
+      <label>Šablóna <input name="template" placeholder="sablona.tex"></label>
+      <label>Referenčný dokument <input name="reference_doc" placeholder="vzor.docx"></label>
+      <label>Časový limit (s) <input name="timeout" type="number" min="10"></label>
+      <label class="wide">Metadáta (riadok = kľúč=hodnota)
+        <textarea name="metadata" rows="3" placeholder="author=Meno Priezvisko&#10;linestretch=1.5"></textarea>
+      </label>
+      <label class="wide">Ďalšie argumenty príkazu
+        <input name="extra_args" placeholder="--highlight-style=tango">
+      </label>
+    </div>
+    <datalist id="dl-paper"><option>a4</option><option>a5</option><option>letter</option></datalist>
+    <datalist id="dl-font"><option>10pt</option><option>11pt</option><option>12pt</option></datalist>
+    <div class="cmd-preview"><span>Príkaz:</span> <code id="s-cmd"></code></div>
+    <div class="row end">
+      <button value="cancel" formnovalidate>Zavrieť</button>
+      <button id="s-save" value="save" class="primary">Uložiť nastavenia</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="/static/vendor/codemirror/lib/codemirror.js"></script>
+<script src="/static/vendor/codemirror/mode/markdown/markdown.js"></script>
+<script src="/static/vendor/codemirror/mode/gfm/gfm.js"></script>
+<script src="/static/vendor/codemirror/mode/yaml/yaml.js"></script>
+<script src="/static/vendor/codemirror/mode/yaml-frontmatter/yaml-frontmatter.js"></script>
+<script src="/static/vendor/codemirror/mode/stex/stex.js"></script>
+<script src="/static/vendor/codemirror/mode/python/python.js"></script>
+<script src="/static/vendor/codemirror/mode/r/r.js"></script>
+<script src="/static/vendor/codemirror/addon/mode/overlay.js"></script>
+<script src="/static/vendor/codemirror/addon/edit/continuelist.js"></script>
+<script src="/static/vendor/codemirror/addon/dialog/dialog.js"></script>
+<script src="/static/vendor/codemirror/addon/search/searchcursor.js"></script>
+<script src="/static/vendor/codemirror/addon/search/search.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
