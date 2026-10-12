@@ -48,9 +48,11 @@ powershell -ExecutionPolicy Bypass -File .\vytvor-zastupcu.ps1
 powershell -ExecutionPolicy Bypass -File .\vytvor-zastupcu.ps1 -Name "Diplomovka" -Folder "C:\Users\Admin\Documents\diplomovka"
 ```
 
-Dvojklik na zástupcu spustí server v minimalizovanom okne a otvorí prehliadač;
-zatvorením tohto okna sa aplikácia ukončí. Pri obsadenom porte sa automaticky
-použije nasledujúci voľný.
+Zástupca spúšťa Python bez konzolového okna (`pyw`/`pythonw`); aplikácia sa ukončí
+tlačidlom **⏻ Ukončiť** v rozhraní. Výstup servera a prípadné chyby sa zapisujú do
+`%USERPROFILE%\.qgui\qgui.log`; chyba pri spustení sa navyše zobrazí v dialógovom okne.
+Na diagnostiku možno vytvoriť zástupcu s konzolou parametrom `-Console`. Pri obsadenom
+porte sa automaticky použije nasledujúci voľný.
 
 Zástupca používa ikonu `assets/quarto.ico` (alternatíva: `assets/qgui.ico`); vlastnú ikonu nastavíš parametrom
 `-Icon "C:\cesta\ikona.ico"`. Konverzia SVG na ICO (napr. cez ImageMagick,

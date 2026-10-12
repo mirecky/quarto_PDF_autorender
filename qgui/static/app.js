@@ -569,6 +569,16 @@ document.addEventListener("keydown", (e) => {
 });
 window.addEventListener("beforeunload", (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ""; } });
 
+/* ------------------------------------------------------------------ ukončenie */
+$("#btn-quit").addEventListener("click", async () => {
+  if (state.dirty && !confirm("Máš neuložené zmeny. Ukončiť aj tak?")) return;
+  if (!state.dirty && !confirm("Ukončiť Quarto Studio?")) return;
+  state.dirty = false;
+  await api("/api/shutdown", {}).catch(() => null);
+  document.body.innerHTML = `<div style="display:grid;place-items:center;height:100vh;font:16px system-ui;color:#555;text-align:center">
+    <div><b>Quarto Studio je ukončené.</b><br><br>Toto okno môžeš zavrieť.</div></div>`;
+});
+
 /* ------------------------------------------------------------------ štart */
 (async function init() {
   editor.readOnly(true);

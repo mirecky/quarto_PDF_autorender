@@ -236,6 +236,10 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     p.unlink()
                 return self._json({"ok": True})
+            if path == "/api/shutdown":
+                self._json({"ok": True})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
+                return None
             if path == "/api/settings":
                 ws.save_settings(data)
                 return self._json({"ok": True})
