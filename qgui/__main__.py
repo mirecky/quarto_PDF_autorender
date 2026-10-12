@@ -1,6 +1,7 @@
 """Spustenie: python -m qgui [PRIEČINOK] [--port 8765] [--no-browser]
 
-Bez priečinka sa otvorí dialóg na jeho výber (ak je dostupný tkinter).
+Bez priečinka sa otvorí naposledy použitý; pri prvom spustení (alebo s --choose)
+dialóg na jeho výber.
 Pri spustení bez konzoly (pythonw, zástupca na ploche) sa výstup zapisuje
 do ~/.qgui/qgui.log a chyby sa zobrazia v dialógovom okne.
 """
@@ -14,6 +15,7 @@ import traceback
 import webbrowser
 from pathlib import Path
 
+from . import desktop
 from .server import make_server
 
 LOG_FILE = Path.home() / ".qgui" / "qgui.log"
@@ -45,37 +47,10 @@ def message(text: str, error: bool = True) -> None:
         pass
 
 
-def pick_folder() -> str | None:
-    """Grafický výber priečinka; pri nedostupnom tkinteri vráti aktuálny priečinok."""
-    try:
-        import tkinter as tk
-        from tkinter import filedialog
-    except ImportError:
-        return "."
-    try:
-        win = tk.Tk()
-    except tk.TclError:  # bez grafického prostredia
-        return "."
-    win.withdraw()
-    win.attributes("-topmost", True)
-    # Pri spustení z minimalizovaného okna (zástupca) by sa dialóg mohol skryť na lište.
-    win.lift()
-    win.focus_force()
-    win.update()
-    start = Path.home() / "Documents"
-    chosen = filedialog.askdirectory(
-        parent=win,
-        title="Quarto Studio – vyber priečinok s dokumentmi",
-        initialdir=str(start if start.is_dir() else Path.home()),
-        mustexist=True,
-    )
-    win.destroy()
-    return chosen or None
-
-
 def run() -> int:
     ap = argparse.ArgumentParser(prog="qgui", description="GUI pre Markdown/Quarto: úpravy, náhľad, render do PDF.")
-    ap.add_argument("folder", nargs="?", help="pracovný priečinok (bez neho sa otvorí dialóg na výber)")
+    ap.add_argument("folder", nargs="?", help="pracovný priečinok (predvolene naposledy použitý)")
+    ap.add_argument("--choose", action="store_true", help="vždy zobraziť dialóg na výber priečinka")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--no-browser", action="store_true", help="neotvárať prehliadač automaticky")
@@ -83,14 +58,19 @@ def run() -> int:
     if unknown:
         print(f"Ignorované neznáme argumenty: {' '.join(unknown)}", file=sys.stderr)
 
-    folder = args.folder or pick_folder()
+    folder = args.folder
+    if not folder and not args.choose:
+        folder = desktop.last_folder()
+    if not folder:
+        folder = desktop.pick_folder(desktop.last_folder())
+    if not folder and not WINDOWLESS and not args.choose:
+        folder = "."  # konzola bez GUI → aktuálny priečinok
     if not folder:
         print("Nebol zvolený pracovný priečinok – koniec.", file=sys.stderr)
         return 1
     root = Path(folder).expanduser().resolve()
     if not root.is_dir():
-        message(f"Priečinok neexistuje:\n{root}\n\nTip: spusti Quarto Studio bez cesty "
-                f"a priečinok vyber v dialógovom okne.")
+        message(f"Priečinok neexistuje:\n{root}\n\nTip: priečinok vyber v dialógovom okne (qgui --choose).")
         return 2
     srv = None
     for port in range(args.port, args.port + 20):  # obsadený port → skúsiť ďalší
@@ -102,6 +82,7 @@ def run() -> int:
     if srv is None:
         message(f"Porty {args.port}–{args.port + 19} sú obsadené.")
         return 3
+    desktop.remember_folder(root)
     url = f"http://{args.host}:{srv.server_address[1]}/"
     print(f"qgui beží na {url}  (pracovný priečinok: {root})\n"
           f"Ukončenie: tlačidlo „Ukončiť“ v aplikácii alebo Ctrl+C")

@@ -77,7 +77,10 @@ qgui ~/Dokumenty/praca --port 8765
 
 Prehliadač sa otvorí automaticky (`--no-browser` to potlačí). Argument určuje
 **pracovný priečinok** – aplikácia pristupuje výhradne k súborom v ňom. Ak ho
-neuvedieš, zobrazí sa dialóg na jeho výber.
+neuvedieš, otvorí sa naposledy použitý priečinok; pri prvom spustení (alebo s prepínačom
+`--choose`) sa zobrazí dialóg na jeho výber. Za behu sa priečinok mení tlačidlom
+**📂 názov priečinka** v hornej lište, ktoré ponúka aj zoznam nedávnych priečinkov
+(uložený v `~/.qgui/config.json`).
 
 ## Funkcie
 

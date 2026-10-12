@@ -257,7 +257,7 @@ async function openFile(path) {
   editor.readOnly(false);
   setDirty(false);
   updateTitle();
-  store.set("lastFile", r.path);
+  store.set(lastFileKey(), r.path);
   status(`Otvorené: ${r.path}`);
   state.outputs = [];
   refreshOutputSelect();
@@ -579,6 +579,65 @@ $("#btn-quit").addEventListener("click", async () => {
     <div><b>Quarto Studio je ukončené.</b><br><br>Toto okno môžeš zavrieť.</div></div>`;
 });
 
+/* ------------------------------------------------------------------ pracovný priečinok */
+const lastFileKey = () => "lastFile:" + (state.root || "");
+async function loadWorkspace() {
+  const w = await api("/api/workspace");
+  state.root = w.root;
+  const name = (w.root || "").split(/[\\/]/).filter(Boolean).pop() || w.root;
+  $("#folder-name").textContent = name;
+  $("#btn-folder").title = w.root + "\nKliknutím zmeníš pracovný priečinok";
+  $("#status-root").textContent = w.root;
+  state.path = null; state.outputs = []; state.dirty = false;
+  editor.set(""); editor.readOnly(true);
+  updateTitle(); refreshOutputSelect();
+  $("#preview-frame").srcdoc = "";
+  await loadSettings();
+  await loadTree();
+  const last = store.get(lastFileKey(), null);
+  const exists = (items, p) => items.some((i) => (i.dir ? exists(i.children, p) : i.path === p));
+  if (last && exists(state.tree, last)) return openFile(last);
+  const first = (function find(items) {
+    for (const i of items) {
+      if (i.dir) { const f = find(i.children); if (f) return f; } else if (DOC_EXT.test(i.name)) return i.path;
+    }
+    return null;
+  })(state.tree);
+  if (first) openFile(first);
+}
+async function switchWorkspace(body) {
+  if (state.dirty && !confirm("Neuložené zmeny sa stratia. Pokračovať?")) return;
+  status(body.pick ? "Vyber priečinok v otvorenom okne…" : "Otváram priečinok…", "busy");
+  const r = await api("/api/workspace", body);
+  if (!r.ok) return status(r.cancelled ? "Výber priečinka zrušený." : r.error, r.cancelled ? "" : "error");
+  $("#folder-dlg").close();
+  state.dirty = false;
+  await loadWorkspace();
+  status(`Pracovný priečinok: ${r.root}`, "success");
+}
+async function showFolderDialog() {
+  const w = await api("/api/workspace");
+  const list = $("#recent-list");
+  list.innerHTML = w.recent.length
+    ? w.recent.map((f) => `<li><button type="button" class="recent" data-path="${esc(f)}" title="${esc(f)}">📁 ${esc(f)}</button>
+        <button type="button" class="icon forget" data-path="${esc(f)}" title="Odstrániť zo zoznamu">✕</button></li>`).join("")
+    : `<li class="muted">Zatiaľ žiadne ďalšie priečinky.</li>`;
+  $("#current-root").textContent = w.root;
+  $("#folder-dlg").showModal();
+}
+$("#btn-folder").addEventListener("click", showFolderDialog);
+$("#btn-pick-folder").addEventListener("click", () => switchWorkspace({ pick: true }));
+$("#recent-list").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.classList.contains("forget")) {
+    await api("/api/workspace", { forget: b.dataset.path });
+    showFolderDialog();
+  } else {
+    switchWorkspace({ path: b.dataset.path });
+  }
+});
+
 /* ------------------------------------------------------------------ štart */
 (async function init() {
   editor.readOnly(true);
@@ -590,20 +649,6 @@ $("#btn-quit").addEventListener("click", async () => {
       `<span class="${t.quarto ? "ok" : "no"}" title="${esc(t.quarto || "nenájdené")}">Quarto ${t.quarto ? esc(t.quarto) : "✘"}</span>` +
       `<span class="${t.pandoc ? "ok" : "no"}" title="${esc(t.pandoc || "nenájdené")}">${t.pandoc ? esc(t.pandoc) : "Pandoc ✘"}</span>` +
       `<span title="Dostupné PDF enginy">PDF: ${engines.length ? esc(engines.join(", ")) : "—"}</span>`;
-    $("#status-root").textContent = info.root;
   }
-  await loadSettings();
-  await loadTree();
-  const last = store.get("lastFile", null);
-  const exists = (items, p) => items.some((i) => (i.dir ? exists(i.children, p) : i.path === p));
-  if (last && exists(state.tree, last)) openFile(last);
-  else {
-    const first = (function find(items) {
-      for (const i of items) {
-        if (i.dir) { const f = find(i.children); if (f) return f; } else if (DOC_EXT.test(i.name)) return i.path;
-      }
-      return null;
-    })(state.tree);
-    if (first) openFile(first);
-  }
+  await loadWorkspace();
 })();
