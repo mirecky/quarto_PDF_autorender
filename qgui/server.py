@@ -11,6 +11,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from . import desktop
 from . import render as R
 
 STATIC = Path(__file__).parent / "static"
@@ -41,6 +42,11 @@ class Workspace:
         self.root = root.resolve()
         self.locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
+
+    def set_root(self, root: Path) -> None:
+        with self._guard:
+            self.root = root.resolve()
+            self.locks = {}
 
     def resolve(self, rel: str) -> Path:
         p = (self.root / (rel or "").lstrip("/")).resolve()
@@ -172,6 +178,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(self.ws.resolve(path[len("/raw/"):]), "download" in q)
             if path == "/api/info":
                 return self._json({"ok": True, "root": str(self.ws.root), "tools": R.tool_versions()})
+            if path == "/api/workspace":
+                return self._json({"ok": True, "root": str(self.ws.root),
+                                   "recent": [f for f in desktop.recent_folders() if f != str(self.ws.root)]})
             if path == "/api/tree":
                 return self._json({"ok": True, "tree": self.ws.tree()})
             if path == "/api/file":
@@ -236,6 +245,22 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     p.unlink()
                 return self._json({"ok": True})
+            if path == "/api/workspace":
+                if data.get("forget"):
+                    desktop.forget_folder(data["forget"])
+                    return self._json({"ok": True})
+                if data.get("pick"):
+                    chosen = desktop.pick_folder(ws.root)
+                    if not chosen:
+                        return self._json({"ok": False, "cancelled": True, "error": "Výber zrušený."})
+                else:
+                    chosen = data.get("path", "")
+                new_root = Path(chosen).expanduser()
+                if not new_root.is_dir():
+                    return self._err("Priečinok neexistuje.", 404)
+                ws.set_root(new_root)
+                desktop.remember_folder(ws.root)
+                return self._json({"ok": True, "root": str(ws.root)})
             if path == "/api/shutdown":
                 self._json({"ok": True})
                 threading.Thread(target=self.server.shutdown, daemon=True).start()

@@ -42,6 +42,15 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-
   background: var(--panel); border-bottom: 1px solid var(--border);
 }
 .brand { font-weight: 700; letter-spacing: .2px; }
+.folder-btn { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-form { padding: 16px 20px; }
+.folder-form h2 { margin: 0 0 6px; font-size: 17px; }
+.folder-form h3 { margin: 14px 0 6px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.folder-form code { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+.recent-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+.recent-list li { display: flex; gap: 4px; margin-bottom: 4px; }
+.recent-list li.muted { color: var(--muted); font-size: 13px; padding: 4px 0; }
+.recent-list .recent { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12px; }
 .group { display: flex; align-items: center; gap: 6px; }
 .lbl { color: var(--muted); font-size: 13px; }
 .chk { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; user-select: none; }

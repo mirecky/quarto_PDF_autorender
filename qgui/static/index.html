@@ -12,6 +12,7 @@
 <body>
 <header id="topbar">
   <div class="brand">Quarto&nbsp;Studio</div>
+  <button id="btn-folder" class="folder-btn">📂 <span id="folder-name">…</span> ▾</button>
   <div class="group">
     <button id="btn-save" title="Uložiť (Ctrl+S)">Uložiť</button>
     <span id="dirty" class="dirty" hidden>●</span>
@@ -96,6 +97,19 @@
 </main>
 
 <footer id="status"><span id="status-text">Pripravené.</span><span id="status-root"></span></footer>
+
+<dialog id="folder-dlg">
+  <form method="dialog" class="folder-form">
+    <h2>Pracovný priečinok</h2>
+    <p class="hint">Aktuálny: <code id="current-root"></code></p>
+    <h3>Nedávne priečinky</h3>
+    <ul id="recent-list" class="recent-list"></ul>
+    <div class="row end">
+      <button type="button" id="btn-pick-folder" class="primary">📁 Vybrať iný priečinok…</button>
+      <button value="cancel">Zavrieť</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="settings-dlg">
   <form method="dialog" id="settings-form">
