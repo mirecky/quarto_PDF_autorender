@@ -52,7 +52,7 @@ Dvojklik na zástupcu spustí server v minimalizovanom okne a otvorí prehliada�
 zatvorením tohto okna sa aplikácia ukončí. Pri obsadenom porte sa automaticky
 použije nasledujúci voľný.
 
-Zástupca používa ikonu `assets/qgui.ico`; vlastnú ikonu nastavíš parametrom
+Zástupca používa ikonu `assets/quarto.ico` (alternatíva: `assets/qgui.ico`); vlastnú ikonu nastavíš parametrom
 `-Icon "C:\cesta\ikona.ico"`. Konverzia SVG na ICO (napr. cez ImageMagick,
 `winget install ImageMagick.ImageMagick`):
 

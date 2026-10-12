@@ -19,7 +19,7 @@ if ($Folder) {
     $lnk.Arguments = "`"$full`""
 }
 $lnk.WindowStyle = 7                                  # minimalizované okno servera
-if (-not $Icon) { $Icon = Join-Path $PSScriptRoot "assets\qgui.ico" }
+if (-not $Icon) { $Icon = Join-Path $PSScriptRoot "assets\quarto.ico" }
 if (Test-Path -LiteralPath $Icon) {
     $lnk.IconLocation = (Resolve-Path -LiteralPath $Icon).Path + ",0"
 } else {
