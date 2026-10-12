@@ -26,8 +26,13 @@ def pick_folder() -> str | None:
         return "."
     win.withdraw()
     win.attributes("-topmost", True)
+    # Pri spustení z minimalizovaného okna (zástupca) by sa dialóg mohol skryť na lište.
+    win.lift()
+    win.focus_force()
+    win.update()
     start = Path.home() / "Documents"
     chosen = filedialog.askdirectory(
+        parent=win,
         title="Quarto Studio – vyber priečinok s dokumentmi",
         initialdir=str(start if start.is_dir() else Path.home()),
         mustexist=True,
