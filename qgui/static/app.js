@@ -9,7 +9,7 @@ const DOC_LIKE = /\.(md|qmd|rmd|markdown|ya?ml|bib|csl|tex|css|scss|lua|typ|json
 const state = {
   path: null, dirty: false, settings: null, outputs: [], tree: [],
   rendering: false, previewTimer: null, previewSeq: 0, saving: false,
-  version: 0, savedVersion: 0, autosaveTimer: null, savePromise: null, lastSaveError: null, realBusy: false, realPending: false,
+  version: 0, savedVersion: 0, autosaveTimer: null, savePromise: null, lastSaveError: null, realBusy: false, realPending: false, selectedDir: null,
 };
 
 /* ------------------------------------------------------------------ util */
@@ -157,9 +157,10 @@ function renderTree() {
     for (const it of items) {
       if (it.dir) {
         const kids = build(it.children);
-        if (onlyDocs && !kids.childNodes.length) continue;
+        // skryť priečinky bez dokumentov, no skutočne prázdne (napr. práve vytvorené) ukázať
+        if (onlyDocs && !kids.childNodes.length && it.children.length) continue;
         const n = document.createElement("div");
-        n.className = "node dir";
+        n.className = "node dir" + (it.path === state.selectedDir ? " selected" : "");
         n.dataset.path = it.path;
         const isC = collapsed.has(it.path);
         n.innerHTML = `<span class="ico">${isC ? "▸" : "▾"}</span>${esc(it.name)}`;
@@ -191,6 +192,7 @@ $("#tree").addEventListener("click", (e) => {
   const n = e.target.closest(".node");
   if (!n) return;
   if (n.classList.contains("dir")) {
+    selectDir(n.dataset.path);
     const c = n.nextElementSibling;
     c.classList.toggle("collapsed");
     n.querySelector(".ico").textContent = c.classList.contains("collapsed") ? "▸" : "▾";
@@ -234,7 +236,7 @@ const PROJECT_FILES = {
   book: "_quarto.yml, index.qmd, uvod.qmd, zaver.qmd, literatura.qmd, literatura.bib",
 };
 $("#btn-new").addEventListener("click", () => {
-  const dir = state.path && state.path.includes("/") ? state.path.replace(/[^/]+$/, "") : "";
+  const dir = targetDir();
   $("#new-type").value = store.get("newKind", "qmd");
   $("#new-name").value = dir + defaultNewName($("#new-type").value);
   updateNewHint();
@@ -245,7 +247,7 @@ function defaultNewName(kind) {
   const base = { revealjs: "prezentacia", beamer: "prezentacia", pptx: "prezentacia", dashboard: "dashboard",
                  website: "moj-web", book: "moja-kniha" }[kind] || "novy-dokument";
   // voľný názov: prezentacia, prezentacia-2, … (podľa stromu súborov)
-  const dir = state.path && state.path.includes("/") ? state.path.replace(/[^/]+$/, "") : "";
+  const dir = targetDir();
   const taken = new Set();
   (function walk(items) { for (const i of items) { taken.add(i.path.replace(/\.(qmd|md)$/i, "")); if (i.dir) walk(i.children); } })(state.tree);
   let name = base, n = 2;
@@ -287,12 +289,28 @@ $("#new-dlg").addEventListener("close", async () => {
   await openFile(r.path);
   status(PROJECT_KINDS[kind] ? `Projekt vytvorený: ${name}/ – ▶ Projekt ho celý vyrenderuje.` : `Vytvorené: ${r.path}`, "success");
 });
+/** Priečinok, do ktorého sa vytvárajú nové súbory: vybraný klikom, inak priečinok otvoreného súboru. */
+function targetDir() {
+  if (state.selectedDir !== null && state.selectedDir !== undefined) return state.selectedDir ? state.selectedDir + "/" : "";
+  return state.path && state.path.includes("/") ? state.path.replace(/[^/]+$/, "") : "";
+}
+function selectDir(path) {
+  state.selectedDir = path;
+  $$(".node.dir").forEach((d) => d.classList.toggle("selected", d.dataset.path === path));
+  status(path ? `Vybraný priečinok: ${path} – nové súbory sa vytvoria v ňom.` : "Nové súbory sa vytvoria v koreni.");
+}
 $("#btn-newdir").addEventListener("click", async () => {
-  const name = prompt("Názov nového priečinka:");
-  if (!name) return;
+  const name = (prompt("Názov nového priečinka:", targetDir()) || "").trim().replace(/\/+$/, "");
+  if (!name || name + "/" === targetDir()) return;
   const r = await api("/api/new", { path: name, dir: true });
   if (!r.ok) return status(r.error, "error");
-  loadTree();
+  // rodičovské priečinky rozbaliť, nový vybrať
+  const collapsed = new Set(store.get("collapsed", []));
+  r.path.split("/").forEach((_, i, a) => collapsed.delete(a.slice(0, i + 1).join("/")));
+  store.set("collapsed", [...collapsed]);
+  await loadTree();
+  selectDir(r.path);
+  status(`Priečinok vytvorený: ${r.path} – nové súbory (＋) sa vytvoria v ňom.`, "success");
 });
 
 /* ------------------------------------------------------------------ otvorenie / uloženie */
@@ -314,6 +332,8 @@ async function openFile(path) {
     return status(`Súbor „${path}“ sa nedá otvoriť: ${r.error} Zoznam súborov bol obnovený.`, "error");
   }
   state.path = r.path;
+  state.selectedDir = null;
+  $$(".node.dir.selected").forEach((d) => d.classList.remove("selected"));
   editor.setMode(r.path);
   editor.set(r.content);
   editor.readOnly(false);

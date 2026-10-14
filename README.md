@@ -120,7 +120,8 @@ nespraví článok). Súbory v projekte sa renderujú podľa `_quarto.yml`; tla�
 **▶ Projekt** vyrenderuje celý web alebo knihu a zobrazí úvodnú stránku s navigáciou.
 Náhľad stránky projektu sa vytvára z uloženého súboru priamo v `_site`/`_book`.
 
-**Správa súborov.** Strom pracovného priečinka, vytvorenie priečinka; premenovanie a zmazanie cez kontextovú ponuku (pravé tlačidlo).
+**Správa súborov.** Strom pracovného priečinka; kliknutím na priečinok sa vyberie a nové
+súbory aj podpriečinky (📁) sa vytvoria v ňom (inak v priečinku otvoreného súboru); premenovanie a zmazanie cez kontextovú ponuku (pravé tlačidlo).
 
 **Náhľad.** Obnovuje sa automaticky počas písania; do súborov používateľa nič nezapisuje.
 
