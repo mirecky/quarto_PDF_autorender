@@ -252,6 +252,42 @@ def _move(p: Path, target_dir: Path) -> Path:
     return target
 
 
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_KEY_LINE_RE = re.compile(r"(FATAL|ERROR|Error|error:|Traceback|^! |ModuleNotFoundError|not found)", re.M)
+_HINTS = [
+    (re.compile(r"rsvg-convert", re.I),
+     "Obrázok je vo formáte SVG a LaTeX (PDF) ho bez programu rsvg-convert nevie vložiť. "
+     "Riešenie: generuj obrázok ako PNG (napr. schemdraw.use('matplotlib') a "
+     "Image(d.get_imagedata('png'))), použi PDF cez Typst, alebo nainštaluj rsvg-convert."),
+    (re.compile(r"No module named '([\w.]+)'"),
+     "Chýba Python balík „{0}“. Nainštaluj ho: py -m pip install {0}"),
+    (re.compile(r"[Jj]upyter.*(not found|is not available|could not)|No module named 'jupyter"),
+     "Na spúšťanie Python blokov treba Jupyter: py -m pip install jupyter"),
+    (re.compile(r"LaTeX Error: File `([^']+)' not found"),
+     "LaTeX nemá balík „{0}“. Spusti: quarto install tinytex --update-path, prípadne tlmgr install <balík>."),
+    (re.compile(r"(xelatex|lualatex|pdflatex)[^\n]*(not found|No such file)", re.I),
+     "Nenašiel sa LaTeX. Nainštaluj ho: quarto install tinytex"),
+]
+
+
+def diagnose(log: str) -> dict:
+    """Podstatné riadky chyby a slovenská rada pre známe problémy."""
+    lines = (log or "").splitlines()
+    key: list[str] = []
+    for i, l in enumerate(lines):
+        if _KEY_LINE_RE.search(l) and not l.strip().startswith("..."):
+            for x in (l, lines[i + 1] if i + 1 < len(lines) else ""):  # aj riadok s vysvetlením
+                x = x.strip()
+                if x and x not in key and not x.startswith(("...", "[C]")):
+                    key.append(x)
+    hints = []
+    for rx, text in _HINTS:
+        m = rx.search(log or "")
+        if m:
+            hints.append(text.format(*m.groups()) if m.groups() else text)
+    return {"key_lines": key[:8], "hints": hints}
+
+
 _OUTPUT_CREATED_RE = re.compile(r"^\s*Output created:\s*(.+?)\s*$", re.M)
 
 
@@ -281,7 +317,7 @@ def render(src: Path, settings: dict) -> dict:
     start = time.time()
     try:
         res = _run(cmd, cwd=src.parent, timeout=int(s["timeout"] or 600))
-        code, log = res.returncode, (res.stdout or "") + (res.stderr or "")
+        code, log = res.returncode, _ANSI_RE.sub("", (res.stdout or "") + (res.stderr or ""))
     except FileNotFoundError:
         return {"ok": False, "cmd": cmd, "log": f"Program sa nenašiel: {cmd[0]}", "outputs": []}
     except subprocess.TimeoutExpired as exc:
@@ -320,6 +356,7 @@ def render(src: Path, settings: dict) -> dict:
         log += ("\n[Quarto Studio] Výstupný súbor sa nenašiel. Skontroluj v YAML hlavičke "
                 "kľúče output-file / output-dir, prípadne priečinok projektu (_quarto.yml).\n")
     return {
+        **(diagnose(log) if code != 0 else {}),
         "ok": code == 0,
         "code": code,
         "cmd": cmd,
@@ -497,7 +534,8 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     want = (".html",) if is_html else (".pdf",)
     out = next((o for o in outputs if o.suffix.lower() in want), None)
     if not res["ok"] or not out:
-        return {"ok": False, "log": res.get("log", "") or "Náhľad sa nepodarilo vytvoriť.", "note": note}
+        log = res.get("log", "") or "Náhľad sa nepodarilo vytvoriť."
+        return {"ok": False, "log": log, "note": note, **diagnose(log)}
     result = {"ok": True, "kind": "html" if is_html else "pdf", "file": out.name,
               "seconds": res.get("seconds"), "note": note, "log": res.get("log", "")}
     if is_html:
