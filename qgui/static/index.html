@@ -26,12 +26,11 @@
     <button id="btn-render" class="primary" title="Renderovať (Ctrl+Enter)">▶ Renderovať</button>
   </div>
   <div class="group">
-    <label class="chk" title="Po uložení (aj automatickom) PDF samo prerenderovať – asi 4 s po dopísaní; neprepína záložky"><input type="checkbox" id="auto-render"> auto-render</label>
     <label class="chk" title="Živý náhľad počas písania"><input type="checkbox" id="live-preview" checked> živý náhľad</label>
     <label class="chk" title="Posúvanie editora a náhľadu spolu"><input type="checkbox" id="sync-scroll" checked> synchr. posúvanie</label>
-    <select id="preview-mode" title="Spôsob náhľadu">
-      <option value="pandoc">náhľad: rýchly (Pandoc)</option>
-      <option value="quarto">náhľad: plný (Quarto HTML)</option>
+    <select id="preview-mode" title="Reálny = skutočný výstup podľa profilu (PDF/HTML), do súboru sa zapíše až po ▶ Renderovať">
+      <option value="real">náhľad: reálny (podľa profilu)</option>
+      <option value="pandoc">náhľad: rýchly (HTML)</option>
     </select>
   </div>
   <div class="spacer"></div>
@@ -82,7 +81,7 @@
 
   <section id="right-pane">
     <div class="pane-head tabs">
-      <button class="tab active" data-tab="preview">Náhľad</button>
+      <button class="tab active" data-tab="preview">Náhľad <span id="preview-busy" class="busy-spin" hidden title="Náhľad sa pripravuje">⟳</span></button>
       <button class="tab" data-tab="output">Výstup</button>
       <button class="tab" data-tab="log">Log <span id="log-badge" class="badge" hidden></span></button>
       <div class="spacer"></div>
@@ -90,7 +89,11 @@
       <a id="btn-open-output" class="btnlink" target="_blank" hidden>Otvoriť ↗</a>
       <a id="btn-download" class="btnlink" hidden>Stiahnuť</a>
     </div>
-    <div class="tab-body" id="tab-preview"><iframe id="preview-frame" title="Náhľad"></iframe></div>
+    <div class="tab-body" id="tab-preview">
+      <iframe id="preview-frame" title="Náhľad"></iframe>
+      <div id="pdf-view" class="pdf-view" hidden></div>
+      <div id="preview-error" class="preview-error" hidden><span class="msg"></span><button class="close" title="Zavrieť">✕</button></div>
+    </div>
     <div class="tab-body" id="tab-output" hidden>
       <iframe id="output-frame" title="Výstup"></iframe>
       <div id="output-empty" class="empty"><p>Výstup sa zobrazí po renderovaní.<br>Klikni na <b>▶ Renderovať</b> alebo stlač <kbd>Ctrl</kbd>+<kbd>Enter</kbd>.</p></div>
@@ -217,6 +220,7 @@
 <script src="/static/vendor/codemirror/addon/dialog/dialog.js"></script>
 <script src="/static/vendor/codemirror/addon/search/searchcursor.js"></script>
 <script src="/static/vendor/codemirror/addon/search/search.js"></script>
+<script src="/static/vendor/pdfjs/pdf.min.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

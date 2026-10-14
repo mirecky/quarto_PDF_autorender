@@ -6,6 +6,7 @@ import datetime
 import json
 import mimetypes
 import shutil
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -60,6 +61,9 @@ class Workspace:
         self.locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
         self.pending: dict | None = None  # súbor na otvorenie z Prieskumníka
+        # Dočasný priečinok pre reálny náhľad (mimo priečinka používateľa).
+        self.preview_dir = Path(tempfile.mkdtemp(prefix="qgui-preview-"))
+        self.preview_lock = threading.Lock()
 
     # --- otvorenie súboru zvonka (dvojklik v Prieskumníkovi)
     PENDING_ANY_AFTER = 2.5   # s – potom si požiadavku vyzdvihne ľubovoľná karta
@@ -159,7 +163,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "qgui/1.0"
 
     def log_message(self, fmt, *args):  # tichší log
-        if not str(args[0]).startswith(("GET /raw", "GET /static", "POST /api/preview", "GET /api/pending")):
+        if not str(args[0]).startswith(("GET /raw", "GET /static", "GET /preview-out", "POST /api/preview", "GET /api/pending")):
             super().log_message(fmt, *args)
 
     # ------------------------------------------------------------ pomocné
@@ -214,6 +218,11 @@ class Handler(BaseHTTPRequestHandler):
                 if STATIC.resolve() not in p.parents:
                     return self._err("Zakázané.", 403)
                 return self._file(p)
+            if path.startswith("/preview-out/"):
+                f = (self.ws.preview_dir / path[len("/preview-out/"):]).resolve()
+                if f.parent != self.ws.preview_dir.resolve():
+                    return self._err("Zakázané.", 403)
+                return self._file(f)
             if path.startswith("/raw/"):
                 return self._file(self.ws.resolve(path[len("/raw/"):]), "download" in q)
             if path == "/api/info":
@@ -319,8 +328,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
             if path == "/api/preview":
                 p = ws.resolve(data["path"])
-                fn = R.preview_quarto if data.get("mode") == "quarto" else R.preview_pandoc
-                res = fn(p, data.get("content", ""))
+                if data.get("mode") == "real":
+                    with ws.preview_lock:  # naraz najviac jeden reálny náhľad
+                        res = R.preview_real(p, data.get("content", ""), data.get("settings") or {},
+                                             ws.preview_dir)
+                    if res.get("kind") == "pdf":
+                        res["url"] = "/preview-out/" + urllib.parse.quote(res["file"])
+                else:
+                    res = R.preview_pandoc(p, data.get("content", ""))
                 res["base"] = "/raw/" + urllib.parse.quote(ws.rel(p.parent) + "/" if p.parent != ws.root else "")
                 return self._json(res)
             if path == "/api/render":

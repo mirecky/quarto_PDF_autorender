@@ -140,3 +140,10 @@ class ReportedOutputsTest(unittest.TestCase):
             cmd = ["pandoc", "a.md", "-o", str(base / "x.docx")]
             self.assertEqual([p.name for p in R.reported_outputs("", cmd, base)], ["x.docx"])
             self.assertEqual(R.reported_outputs("Output created: chyba.pdf", ["quarto"], base), [])
+
+
+class YamlFormatTest(unittest.TestCase):
+    def test_first_format(self):
+        self.assertEqual(R._yaml_first_format("---\ntitle: X\nformat: pdf\n---\n"), "pdf")
+        self.assertEqual(R._yaml_first_format("---\nformat:\n  docx:\n    toc: true\n  pdf: default\n---\n"), "docx")
+        self.assertEqual(R._yaml_first_format("# bez hlavičky\n"), "")

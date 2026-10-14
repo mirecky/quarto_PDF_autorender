@@ -424,27 +424,82 @@ def preview_pandoc(src: Path, content: str) -> dict:
     return {"ok": res.returncode == 0, "html": _POLYFILL_RE.sub("", res.stdout), "log": res.stderr}
 
 
-def preview_quarto(src: Path, content: str) -> dict:
-    """Plný Quarto HTML náhľad (vykoná kód, callouty, crossref...)."""
-    exe = _which("quarto")
-    if not exe:
-        return {"ok": False, "log": "Quarto nie je nainštalované."}
-    fd, tmp_name = tempfile.mkstemp(prefix=".qgui-preview-", suffix=".qmd", dir=src.parent)
-    tmp = Path(tmp_name)
-    html = tmp.with_suffix(".html")
-    files_dir = tmp.parent / f"{tmp.stem}_files"
+_YAML_FORMAT_RE = re.compile(r"^format:[ \t]*(\S*)[ \t]*$", re.M)
+_YAML_SUBKEY_RE = re.compile(r"^[ \t]+([\w-]+):", re.M)
+
+
+def _yaml_first_format(content: str) -> str:
+    """Prvý formát z YAML hlavičky (format: pdf / format:\n  pdf: ...); inak ""."""
+    m = re.match(r"^---\s*\n(.*?)\n(---|\.\.\.)\s*$", content, re.S | re.M)
+    if not m:
+        return ""
+    yaml = m.group(1)
+    f = _YAML_FORMAT_RE.search(yaml)
+    if not f:
+        return ""
+    if f.group(1):
+        return f.group(1).strip("\"'")
+    sub = _YAML_SUBKEY_RE.search(yaml, f.end())
+    return sub.group(1) if sub else ""
+
+
+def _hide(path: Path) -> None:
+    """Na Windows označí súbor ako skrytý (dočasné súbory náhľadu v Prieskumníkovi)."""
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetFileAttributesW(str(path), 0x02)
+        except Exception:
+            pass
+
+
+PREVIEWABLE = {"pdf", "beamer", "typst", "html", "revealjs"}
+
+
+def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict:
+    """Skutočný náhľad podľa profilu (PDF/HTML) do dočasného priečinka out_dir.
+
+    Výstup sa nezapisuje do priečinka používateľa: zdroj sa dočasne uloží ako skrytý
+    súbor vedľa originálu (kvôli relatívnym cestám k obrázkom a bibliografii) a hotový
+    výstup sa presunie do out_dir. Formáty, ktoré prehliadač nezobrazí (DOCX…), sa
+    v náhľade nahradia HTML.
+    """
+    s = merged(settings)
+    fmt = (s["format"] or "").strip() or _yaml_first_format(content) or "html"
+    note = ""
+    if fmt not in PREVIEWABLE:
+        note = f"Formát „{fmt}“ sa nedá zobraziť v prehliadači – náhľad je v HTML."
+        fmt = "html"
+    if s["engine"] == "pandoc" and fmt == "typst":
+        fmt, s["pdf_engine"] = "pdf", "typst"
+    is_html = fmt in ("html", "revealjs")
+    s["format"] = fmt
+    s["output_dir"] = str(out_dir)
+    if is_html:
+        if s["engine"] == "pandoc":
+            s["extra_args"] = (s["extra_args"] + " --embed-resources --standalone").strip()
+        else:
+            s["metadata"] = (s["metadata"] + "\nembed-resources=true").strip()
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for old in out_dir.iterdir():  # ponechať iba posledný náhľad
+        shutil.rmtree(old, ignore_errors=True) if old.is_dir() else old.unlink(missing_ok=True)
+
+    tmp = src.parent / f".qgui-preview-{os.getpid()}-{int(time.time() * 1000)}{src.suffix}"
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(add_line_markers(content))
-        cmd = [exe, "render", tmp.name, "--to", "html", "-M", "embed-resources:true",
-               "-M", "toc:true", "--quiet"]
-        res = _run(cmd, cwd=src.parent, timeout=300)
-        if res.returncode != 0 or not html.exists():
-            return {"ok": False, "log": res.stdout + res.stderr}
-        return {"ok": True, "html": html.read_text(encoding="utf-8"), "log": res.stderr}
-    except subprocess.TimeoutExpired:
-        return {"ok": False, "log": "Quarto náhľad prekročil časový limit."}
+        tmp.write_text(add_line_markers(content) if is_html else content, encoding="utf-8")
+        _hide(tmp)
+        res = render(tmp, s)
     finally:
-        for p in (tmp, html):
-            p.unlink(missing_ok=True)
-        shutil.rmtree(files_dir, ignore_errors=True)
+        for leftover in src.parent.glob(tmp.stem + "*"):  # .tex, _files, .log …
+            shutil.rmtree(leftover, ignore_errors=True) if leftover.is_dir() else leftover.unlink(missing_ok=True)
+    outputs = [Path(o) for o in res.get("outputs", []) if Path(o).parent == out_dir]
+    want = (".html",) if is_html else (".pdf",)
+    out = next((o for o in outputs if o.suffix.lower() in want), None)
+    if not res["ok"] or not out:
+        return {"ok": False, "log": res.get("log", "") or "Náhľad sa nepodarilo vytvoriť.", "note": note}
+    result = {"ok": True, "kind": "html" if is_html else "pdf", "file": out.name,
+              "seconds": res.get("seconds"), "note": note, "log": res.get("log", "")}
+    if is_html:
+        result["html"] = out.read_text(encoding="utf-8", errors="replace")
+    return result
