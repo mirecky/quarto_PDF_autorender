@@ -117,8 +117,11 @@ Do náhľadu sa pred každý blok textu vkladajú neviditeľné značky s čísl
 takže zhoda je presná na úrovni odsekov a nadpisov (vypínateľné voľbou *synchr. posúvanie*).
 
 **Autoukladanie.** Súbor sa uloží 1,5 s po poslednej zmene, ako aj pri prepnutí súboru,
-priečinka alebo opustení okna. Automatické uloženie nespúšťa render ani plný Quarto
-náhľad – tie sa spúšťajú pri ručnom uložení (`Ctrl+S`).
+priečinka alebo opustení okna. Plný Quarto náhľad sa obnovuje pri ručnom uložení (`Ctrl+S`).
+
+**Auto-render.** Pri zapnutej voľbe *auto-render* sa výstup (napr. PDF) prerenderuje
+sám približne 4 s po uložení, teda aj po automatickom uložení. Rendery sa nespúšťajú
+súbežne, záložky sa neprepínajú a otvorená záložka *Výstup* sa obnoví.
 
 **Render.** Výstup sa ukladá do priečinka `_output/` vedľa zdrojového súboru (nastaviteľné)
 a zobrazí sa na záložke *Výstup* – PDF priamo vo vstavanom prehliadači PDF. Úplný výpis

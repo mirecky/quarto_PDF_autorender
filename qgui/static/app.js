@@ -9,7 +9,7 @@ const DOC_LIKE = /\.(md|qmd|rmd|markdown|ya?ml|bib|csl|tex|css|scss|lua|typ|json
 const state = {
   path: null, dirty: false, settings: null, outputs: [], tree: [],
   rendering: false, previewTimer: null, previewSeq: 0, saving: false,
-  version: 0, savedVersion: 0, autosaveTimer: null, savePromise: null, lastSaveError: null,
+  version: 0, savedVersion: 0, autosaveTimer: null, savePromise: null, lastSaveError: null, autoRenderTimer: null, renderQueued: false,
 };
 
 /* ------------------------------------------------------------------ util */
@@ -287,6 +287,7 @@ async function openFile(path) {
   editor.readOnly(false);
   state.version = state.savedVersion = 0;
   clearTimeout(state.autosaveTimer);
+  clearTimeout(state.autoRenderTimer);
   setDirty(false);
   updateTitle();
   store.set(lastFileKey(), r.path);
@@ -299,7 +300,7 @@ async function openFile(path) {
 const autosaveOn = () => $("#auto-save").checked;
 /** Uloží súbor. auto = automatické uloženie (bez renderu a bez Quarto náhľadu).
  *  Prebiehajúce ukladanie sa nikdy neprekrýva: ďalšie volanie počká na jeho koniec. */
-async function save({ silent = false, auto = false } = {}) {
+async function save({ silent = false, auto = false, noRender = false } = {}) {
   if (!state.path) return false;
   while (state.savePromise) await state.savePromise.catch(() => {});
   if (auto && !state.dirty) return true;
@@ -327,11 +328,12 @@ async function save({ silent = false, auto = false } = {}) {
   $("#autosave-info").textContent = `uložené ${new Date().toLocaleTimeString("sk-SK")}`;
   if (auto) {
     if (state.dirty) scheduleAutosave();
+    else if (!noRender) scheduleAutoRender();
     return true;
   }
   if (!silent) status(`Uložené: ${path}`, "success");
   if ($("#preview-mode").value === "quarto") schedulePreview(0);
-  if ($("#auto-render").checked && DOC_EXT.test(path)) doRender();
+  if (!noRender) scheduleAutoRender(0);
   return true;
 }
 function scheduleAutosave(delay = 1500) {
@@ -355,6 +357,7 @@ editor.onChange(() => {
   if (!state.path) return;
   state.version++;
   setDirty(true);
+  clearTimeout(state.autoRenderTimer); // renderovať až po dopísaní a uložení
   scheduleAutosave();
   if ($("#preview-mode").value === "pandoc") schedulePreview();
 });
@@ -422,7 +425,13 @@ async function doPreview() {
 }
 $("#live-preview").addEventListener("change", () => { persistUi(); schedulePreview(0); });
 $("#preview-mode").addEventListener("change", () => { persistUi(); schedulePreview(0); });
-$("#auto-render").addEventListener("change", persistUi);
+$("#auto-render").addEventListener("change", () => {
+  persistUi();
+  if ($("#auto-render").checked) {
+    status("Auto-render zapnutý: PDF sa obnoví niekoľko sekúnd po uložení.", "success");
+    if (!state.dirty) scheduleAutoRender(0);
+  } else clearTimeout(state.autoRenderTimer);
+});
 
 /* ------------------------------------------------------------------ synchronizované posúvanie */
 const syncOn = () => $("#sync-scroll").checked;
@@ -492,18 +501,37 @@ $("#sync-scroll").addEventListener("change", () => { persistUi(); syncScroll("ed
 function activeSettings() {
   return state.settings.profiles[state.settings.active];
 }
-async function doRender() {
-  if (!state.path || state.rendering) return;
-  if (!DOC_EXT.test(state.path)) return status("Renderovať možno iba .md / .qmd / .Rmd súbory.", "error");
-  if (state.dirty && !(await save({ silent: true }))) return;
+/** Naplánuje automatický render (prepínač auto-render) – volá sa po každom uložení. */
+function scheduleAutoRender(delay = 4000) {
+  clearTimeout(state.autoRenderTimer);
+  if (!$("#auto-render").checked || !state.path || !DOC_EXT.test(state.path)) return;
+  state.autoRenderTimer = setTimeout(() => doRender({ auto: true }), delay);
+}
+/** Render aktívnym profilom. auto = spustený automaticky: neprepína záložky a neruší písanie. */
+async function doRender({ auto = false } = {}) {
+  if (!state.path) return;
+  if (state.rendering) { if (auto) state.renderQueued = true; return; }
+  if (!DOC_EXT.test(state.path)) {
+    if (!auto) status("Renderovať možno iba .md / .qmd / .Rmd súbory.", "error");
+    return;
+  }
+  if (state.dirty && !(await save({ silent: true, noRender: true }))) return;
+  clearTimeout(state.autoRenderTimer);
   state.rendering = true;
   $("#btn-render").disabled = true;
   const prof = state.settings.active;
-  status(`Renderujem ${state.path} (${prof})…`, "busy");
+  status(`${auto ? "Auto-render" : "Renderujem"}: ${state.path} (${prof})…`, "busy");
   const t0 = performance.now();
-  const r = await api("/api/render", { path: state.path, settings: activeSettings() });
-  state.rendering = false;
-  $("#btn-render").disabled = false;
+  let r;
+  try {
+    r = await api("/api/render", { path: state.path, settings: activeSettings() });
+  } finally {
+    state.rendering = false;
+    $("#btn-render").disabled = false;
+    // Počas renderu pribudli zmeny → ešte jeden render po skončení tohto.
+    if (state.renderQueued) { state.renderQueued = false; scheduleAutoRender(500); }
+  }
+  const showTab = !auto || $(".tab.active").dataset.tab === "output";
 
   const log = $("#log");
   const cmd = (r.cmd || []).map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(" ");
@@ -517,25 +545,25 @@ async function doRender() {
     state.outputs = r.outputs || [];
     refreshOutputSelect();
     if (state.outputs.length) {
-      showOutput(state.outputs[0]);
-      status(`Hotovo (${secs} s): ${state.outputs.join(", ")}`, "success");
+      showOutput(state.outputs[0], { switchTo: showTab });
+      status(`${auto ? "Auto-render hotový" : "Hotovo"} (${secs} s): ${state.outputs.join(", ")}`, "success");
     } else {
       status(`Hotovo (${secs} s), výstupný súbor sa však nenašiel – pozri log.`, "error");
       $("#output-frame").removeAttribute("src");
       $("#output-empty").hidden = false;
       $("#output-empty").innerHTML = `<p>Render prebehol, ale výstupný súbor sa nenašiel.<br>
         Pozri záložku <b>Log</b> – posledný riadok „Output created:“ ukazuje, kam sa uložil.</p>`;
-      switchTab("output");
+      if (showTab) switchTab("output");
     }
     loadTree();
   } else {
     log.innerHTML += `\n<span class="err">✘ Render zlyhal${r.code !== undefined ? ` (kód ${r.code})` : ""}</span>`;
     badge.textContent = "!"; badge.className = "badge";
-    status("Render zlyhal – podrobnosti v logu.", "error");
-    switchTab("log");
+    status(`${auto ? "Auto-render" : "Render"} zlyhal – podrobnosti na záložke Log.`, "error");
+    if (!auto) switchTab("log");
   }
 }
-$("#btn-render").addEventListener("click", doRender);
+$("#btn-render").addEventListener("click", () => doRender());
 
 function refreshOutputSelect() {
   const sel = $("#output-select");
@@ -543,7 +571,7 @@ function refreshOutputSelect() {
   sel.hidden = state.outputs.length < 2;
 }
 $("#output-select").addEventListener("change", (e) => showOutput(e.target.value));
-function showOutput(path) {
+function showOutput(path, { switchTo = true } = {}) {
   const url = rawUrl(path) + "?t=" + Date.now();
   const viewable = /\.(pdf|html?|png|jpe?g|svg|gif|txt|md|tex|typ)$/i.test(path);
   const frame = $("#output-frame");
@@ -560,7 +588,7 @@ function showOutput(path) {
   open.href = url; open.hidden = !viewable;
   dl.href = rawUrl(path) + "?download=1"; dl.hidden = false;
   $("#output-select").value = path;
-  switchTab("output");
+  if (switchTo) switchTab("output");
 }
 
 /* ------------------------------------------------------------------ záložky */
