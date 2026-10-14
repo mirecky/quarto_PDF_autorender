@@ -397,6 +397,15 @@ async function doPreview() {
   showHtmlPreview(r.html, r.base, true);
 }
 
+/** Text chyby: rada po slovensky, podstatné riadky logu, inak jeho koniec. */
+function describeFailure(r, title) {
+  const parts = [title + ":"];
+  (r.hints || []).forEach((h) => parts.push("💡 " + h));
+  const key = r.key_lines && r.key_lines.length ? r.key_lines
+    : (r.log || r.error || "").trim().split("\n").slice(-10);
+  parts.push(key.join("\n"));
+  return parts.join("\n\n");
+}
 async function doRealPreview() {
   if (state.realBusy) { state.realPending = true; return; } // po dokončení ešte raz
   state.realBusy = true;
@@ -411,10 +420,7 @@ async function doRealPreview() {
   }
   if (state.realPending) { state.realPending = false; schedulePreview(150); }
   if (path !== state.path || previewMode() !== "real") return;
-  if (!r.ok) {
-    const lines = (r.log || r.error || "Náhľad sa nepodarilo vytvoriť.").trim().split("\n");
-    return previewError("Náhľad zlyhal (posledný úspešný zostáva zobrazený):\n" + lines.slice(-12).join("\n"));
-  }
+  if (!r.ok) return previewError(describeFailure(r, "Náhľad zlyhal (posledný úspešný zostáva zobrazený)"));
   previewError(null);
   if (r.note) status(r.note);
   if (r.kind === "pdf") await showPdfPreview(r.url + "?v=" + Date.now());
@@ -654,6 +660,9 @@ async function doRender() {
     loadTree();
   } else {
     log.innerHTML += `\n<span class="err">✘ Render zlyhal${r.code !== undefined ? ` (kód ${r.code})` : ""}</span>`;
+    if ((r.hints || []).length || (r.key_lines || []).length) {
+      log.innerHTML = `<span class="err">${esc(describeFailure(r, "Render zlyhal"))}</span>\n\n────────── celý výpis ──────────\n` + log.innerHTML;
+    }
     badge.textContent = "!"; badge.className = "badge";
     status("Render zlyhal – podrobnosti na záložke Log.", "error");
     switchTab("log");

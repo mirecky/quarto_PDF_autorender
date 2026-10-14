@@ -147,3 +147,17 @@ class YamlFormatTest(unittest.TestCase):
         self.assertEqual(R._yaml_first_format("---\ntitle: X\nformat: pdf\n---\n"), "pdf")
         self.assertEqual(R._yaml_first_format("---\nformat:\n  docx:\n    toc: true\n  pdf: default\n---\n"), "docx")
         self.assertEqual(R._yaml_first_format("# bez hlavičky\n"), "")
+
+
+class DiagnoseTest(unittest.TestCase):
+    def test_rsvg_and_missing_module(self):
+        log = ("FATAL (main.lua:7020) An error occurred:\n"
+               "Could not convert a SVG to a PDF for output. Please ensure that rsvg-convert is available.\n"
+               "\t[C]: in ?\n\t...main.lua:1315: in upvalue\n"
+               "ModuleNotFoundError: No module named 'schemdraw'\n")
+        d = R.diagnose(log)
+        self.assertIn("Could not convert a SVG to a PDF for output. Please ensure that rsvg-convert is available.",
+                      d["key_lines"])
+        self.assertTrue(any("rsvg-convert" in h for h in d["hints"]))
+        self.assertTrue(any("pip install schemdraw" in h for h in d["hints"]))
+        self.assertEqual(R.diagnose("Output created: x.pdf")["hints"], [])
