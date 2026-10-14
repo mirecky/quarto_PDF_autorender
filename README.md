@@ -106,27 +106,28 @@ citácia, poznámka pod čiarou, Quarto callout, blok kódu, zlom strany).
 **Správa súborov.** Strom pracovného priečinka, vytvorenie dokumentu `.qmd` (Quarto) alebo
 `.md` (Markdown/Pandoc) so vzorovou YAML hlavičkou, vytvorenie priečinka; premenovanie a zmazanie cez kontextovú ponuku (pravé tlačidlo).
 
-**Náhľad.**
+**Náhľad.** Obnovuje sa automaticky počas písania; do súborov používateľa nič nezapisuje.
 
-- *rýchly (Pandoc)* – aktualizuje sa počas písania, nevykonáva kód; Quarto-špecifické
-  prvky (callouty, krížové odkazy `@fig-…`) sa nespracujú;
-- *plný (Quarto HTML)* – aktualizuje sa pri uložení, zodpovedá skutočnému výstupu Quarta.
+- *reálny (podľa profilu)* – predvolený; skutočný výstup aktívneho profilu (Quarto/Pandoc,
+  PDF cez LaTeX alebo Typst, prípadne HTML) vytvorený v dočasnom priečinku. PDF sa
+  zobrazuje vstavaným prehliadačom (pdf.js), ktorý pri obnovení zachová pozíciu.
+  Formáty, ktoré prehliadač nezobrazí (DOCX, ODT, EPUB…), sa v náhľade nahradia HTML;
+- *rýchly (HTML)* – okamžitý náhľad cez Pandoc bez vykonávania kódu; Quarto-špecifické
+  prvky (callouty, krížové odkazy) sa nespracujú.
 
 **Synchronizované posúvanie.** Editor a náhľad sa posúvajú spolu v oboch smeroch.
 Do náhľadu sa pred každý blok textu vkladajú neviditeľné značky s číslom riadku zdroja,
 takže zhoda je presná na úrovni odsekov a nadpisov (vypínateľné voľbou *synchr. posúvanie*).
 
 **Autoukladanie.** Súbor sa uloží 1,5 s po poslednej zmene, ako aj pri prepnutí súboru,
-priečinka alebo opustení okna. Plný Quarto náhľad sa obnovuje pri ručnom uložení (`Ctrl+S`).
+priečinka alebo opustení okna. 
 
-**Auto-render.** Pri zapnutej voľbe *auto-render* sa výstup (napr. PDF) prerenderuje
-sám približne 4 s po uložení, teda aj po automatickom uložení. Rendery sa nespúšťajú
-súbežne, záložky sa neprepínajú a otvorená záložka *Výstup* sa obnoví.
 
-**Render.** Výstup sa ukladá do priečinka `_output/` vedľa zdrojového súboru (nastaviteľné)
+**Render.** Až tlačidlo *▶ Renderovať* (`Ctrl+Enter`) zapíše výstup podľa nastavení profilu
+do priečinka `_output/` vedľa zdrojového súboru (nastaviteľné)
 a zobrazí sa na záložke *Výstup* – PDF priamo vo vstavanom prehliadači PDF. Úplný výpis
-príkazu a jeho výstupu je na záložke *Log*. Voľba **auto-render** spúšťa render po každom
-uložení.
+príkazu a jeho výstupu je na záložke *Log*. Po otvorení iného súboru sú záložky *Výstup*
+a *Log* prázdne, kým sa daný súbor nevyrenderuje. 
 
 **Profily renderu.** Nastavenia (nástroj, formát, PDF engine, obsah, číslovanie kapitol,
 bibliografia a citačný štýl, jazyk, papier, písmo, okraje, šablóna, referenčný dokument,
