@@ -112,3 +112,18 @@ class LineMarkersTest(unittest.TestCase):
                 continue
             cleaned.append(line)
         self.assertEqual("\n".join(cleaned), text)
+
+
+class PendingOpenTest(unittest.TestCase):
+    def test_token_claims_immediately_others_after_delay(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            ws = Workspace(Path(d))
+            ws.request_open("a.md", "tok")
+            self.assertIsNone(ws.claim_open(""))          # iná karta hneď nie
+            self.assertIsNone(ws.claim_open("zly"))
+            self.assertEqual(ws.claim_open("tok"), "a.md")  # karta s tokenom áno
+            self.assertIsNone(ws.claim_open("tok"))        # iba raz
+            ws.request_open("b.md", "tok2")
+            with mock.patch("qgui.server.time.time", return_value=ws.pending["t"] + 3):
+                self.assertEqual(ws.claim_open(""), "b.md")  # po 2,5 s ktokoľvek

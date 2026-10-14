@@ -762,9 +762,16 @@ async function loadWorkspace() {
   await loadSettings();
   await loadTree();
   const exists = (items, p) => items.some((i) => (i.dir ? exists(i.children, p) : i.path === p));
-  // ?open=súbor – otvorenie z Prieskumníka (dvojklik na .md/.qmd)
+  // Otvorenie z Prieskumníka (dvojklik na .md/.qmd): spúšťač zadá súbor serveru,
+  // táto karta si ho vyzdvihne podľa tokenu z URL (?t=…).
   const params = new URLSearchParams(location.search);
-  const wanted = params.get("open");
+  const token = params.get("t");
+  if (token) {
+    history.replaceState(null, "", location.pathname);
+    const pend = await api("/api/pending?token=" + encodeURIComponent(token));
+    if (pend.ok && pend.open) return openFile(pend.open);
+  }
+  const wanted = params.get("open"); // staršia forma odkazu
   if (wanted) {
     history.replaceState(null, "", location.pathname);
     if (exists(state.tree, wanted)) return openFile(wanted);
@@ -814,6 +821,19 @@ $("#recent-list").addEventListener("click", async (e) => {
     switchWorkspace({ path: b.dataset.path });
   }
 });
+
+/* ------------------------------------------------------------------ súbory otvorené z Prieskumníka */
+// Ak sa odkaz s tokenom stratí (napr. aplikácia Chrome), požiadavku po chvíli
+// vyzdvihne ktorákoľvek otvorená karta.
+async function checkPendingOpen() {
+  if (!state.root || document.querySelector("dialog[open]")) return;
+  const r = await api("/api/pending");
+  if (!r.ok || !r.open) return;
+  if (r.open !== state.path) await openFile(r.open);
+  status(`Otvorené z Prieskumníka: ${r.open}`, "success");
+  try { window.focus(); } catch { /* ignorovať */ }
+}
+setInterval(checkPendingOpen, 1500);
 
 /* ------------------------------------------------------------------ štart */
 (async function init() {

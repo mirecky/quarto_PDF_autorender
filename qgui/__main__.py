@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import sys
 import threading
 import traceback
-import urllib.parse
 import urllib.request
 import webbrowser
 from pathlib import Path
@@ -50,19 +50,30 @@ def message(text: str, error: bool = True) -> None:
         pass
 
 
-def find_running(host: str, port: int, file: Path) -> str | None:
-    """URL bežiacej inštancie, ktorej pracovný priečinok obsahuje súbor (s ?open=...)."""
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # localhost nikdy cez proxy
+_LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # localhost nikdy cez proxy
+
+
+def _local_json(url: str, body: dict | None = None, timeout: float = 0.5) -> dict:
+    req = urllib.request.Request(url, method="POST" if body is not None else "GET",
+                                 data=json.dumps(body).encode("utf-8") if body is not None else None,
+                                 headers={"Content-Type": "application/json"})
+    with _LOCAL.open(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def open_in_running(host: str, port: int, file: Path, token: str) -> str | None:
+    """Ak beží inštancia, ktorej priečinok obsahuje súbor, zadá jej ho a vráti URL na otvorenie."""
     for p in range(port, port + 20):
+        base = f"http://{host}:{p}/"
         try:
-            with opener.open(f"http://{host}:{p}/api/info", timeout=0.3) as r:
-                info = json.loads(r.read().decode("utf-8"))
+            info = _local_json(base + "api/info", timeout=0.3)
+            root = Path(info.get("root") or "")
+            if not (info.get("ok") and root.is_dir() and (root == file.parent or root in file.parents)):
+                continue
+            if _local_json(base + "api/open", {"path": str(file), "token": token}).get("ok"):
+                return base + "?t=" + token
         except (OSError, ValueError):
             continue
-        root = Path(info.get("root") or "")
-        if info.get("ok") and root.is_dir() and (root == file.parent or root in file.parents):
-            rel = file.relative_to(root).as_posix()
-            return f"http://{host}:{p}/?open=" + urllib.parse.quote(rel)
     return None
 
 
@@ -80,10 +91,11 @@ def run() -> int:
 
     folder = args.folder
     open_rel = None
+    token = secrets.token_hex(8)
     if folder and Path(folder).expanduser().is_file():
         # Otvorenie konkrétneho súboru (dvojklik v Prieskumníkovi / „Otvoriť pomocou“).
         file = Path(folder).expanduser().resolve()
-        running = find_running(args.host, args.port, file)
+        running = open_in_running(args.host, args.port, file, token)
         if running:
             webbrowser.open(running)
             print(f"Súbor otvorený v bežiacej inštancii: {running}")
@@ -114,7 +126,10 @@ def run() -> int:
         return 3
     desktop.remember_folder(root)
     url = f"http://{args.host}:{srv.server_address[1]}/"
-    open_url = url + ("?open=" + urllib.parse.quote(open_rel) if open_rel else "")
+    open_url = url
+    if open_rel:
+        srv.RequestHandlerClass.ws.request_open(open_rel, token)
+        open_url = url + "?t=" + token
     print(f"qgui beží na {url}  (pracovný priečinok: {root})\n"
           f"Ukončenie: tlačidlo „Ukončiť“ v aplikácii alebo Ctrl+C")
     if not args.no_browser:
