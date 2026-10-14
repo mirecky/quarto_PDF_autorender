@@ -7,6 +7,7 @@ import json
 import mimetypes
 import shutil
 import threading
+import time
 import urllib.parse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -58,6 +59,29 @@ class Workspace:
         self.root = root.resolve()
         self.locks: dict[str, threading.Lock] = {}
         self._guard = threading.Lock()
+        self.pending: dict | None = None  # súbor na otvorenie z Prieskumníka
+
+    # --- otvorenie súboru zvonka (dvojklik v Prieskumníkovi)
+    PENDING_ANY_AFTER = 2.5   # s – potom si požiadavku vyzdvihne ľubovoľná karta
+    PENDING_EXPIRE = 120      # s
+
+    def request_open(self, rel: str, token: str = "") -> None:
+        with self._guard:
+            self.pending = {"rel": rel, "token": token, "t": time.time()}
+
+    def claim_open(self, token: str = "") -> str | None:
+        with self._guard:
+            p = self.pending
+            if not p:
+                return None
+            age = time.time() - p["t"]
+            if age > self.PENDING_EXPIRE:
+                self.pending = None
+                return None
+            if (token and token == p["token"]) or age > self.PENDING_ANY_AFTER:
+                self.pending = None
+                return p["rel"]
+            return None
 
     def set_root(self, root: Path) -> None:
         with self._guard:
@@ -135,7 +159,7 @@ class Handler(BaseHTTPRequestHandler):
     server_version = "qgui/1.0"
 
     def log_message(self, fmt, *args):  # tichší log
-        if not str(args[0]).startswith(("GET /raw", "GET /static", "POST /api/preview")):
+        if not str(args[0]).startswith(("GET /raw", "GET /static", "POST /api/preview", "GET /api/pending")):
             super().log_message(fmt, *args)
 
     # ------------------------------------------------------------ pomocné
@@ -194,6 +218,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(self.ws.resolve(path[len("/raw/"):]), "download" in q)
             if path == "/api/info":
                 return self._json({"ok": True, "root": str(self.ws.root), "tools": R.tool_versions()})
+            if path == "/api/pending":
+                return self._json({"ok": True, "open": self.ws.claim_open(q.get("token", [""])[0])})
             if path == "/api/workspace":
                 return self._json({"ok": True, "root": str(self.ws.root),
                                    "recent": [f for f in desktop.recent_folders() if f != str(self.ws.root)]})
@@ -278,6 +304,12 @@ class Handler(BaseHTTPRequestHandler):
                 ws.set_root(new_root)
                 desktop.remember_folder(ws.root)
                 return self._json({"ok": True, "root": str(ws.root)})
+            if path == "/api/open":
+                f = Path(data["path"]).expanduser().resolve()
+                if not f.is_file() or (ws.root != f.parent and ws.root not in f.parents):
+                    return self._err("Súbor nie je v pracovnom priečinku.", 409)
+                ws.request_open(ws.rel(f), str(data.get("token", "")))
+                return self._json({"ok": True, "rel": ws.rel(f)})
             if path == "/api/shutdown":
                 self._json({"ok": True})
                 threading.Thread(target=self.server.shutdown, daemon=True).start()

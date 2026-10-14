@@ -19,6 +19,8 @@
   .cm-variable-2 { color: #89dceb !important; } .cm-def { color: #fab387 !important; }
 }
 * { box-sizing: border-box; }
+/* atribút hidden musí vyhrať nad display: grid/flex z tried */
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body {
   display: flex; flex-direction: column; background: var(--bg); color: var(--text);
