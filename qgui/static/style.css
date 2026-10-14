@@ -80,6 +80,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-
 .node { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
 .node:hover { background: var(--panel2); }
 .node.active { background: var(--sel); font-weight: 600; }
+.node.dir.selected { background: var(--sel); outline: 1px dashed var(--accent); outline-offset: -1px; }
 .node.disabled { color: var(--muted); }
 .node .ico { width: 16px; text-align: center; flex: none; }
 .children.collapsed { display: none; }
