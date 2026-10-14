@@ -127,3 +127,16 @@ class PendingOpenTest(unittest.TestCase):
             ws.request_open("b.md", "tok2")
             with mock.patch("qgui.server.time.time", return_value=ws.pending["t"] + 3):
                 self.assertEqual(ws.claim_open(""), "b.md")  # po 2,5 s ktokoľvek
+
+
+class ReportedOutputsTest(unittest.TestCase):
+    def test_quarto_output_created_and_pandoc_o(self):
+        with tempfile.TemporaryDirectory() as d:
+            base = Path(d)
+            (base / "TVVP (finál).pdf").write_bytes(b"%PDF")
+            (base / "x.docx").write_bytes(b"PK")
+            log = "...\nOutput created: TVVP (finál).pdf\n"
+            self.assertEqual([p.name for p in R.reported_outputs(log, ["quarto"], base)], ["TVVP (finál).pdf"])
+            cmd = ["pandoc", "a.md", "-o", str(base / "x.docx")]
+            self.assertEqual([p.name for p in R.reported_outputs("", cmd, base)], ["x.docx"])
+            self.assertEqual(R.reported_outputs("Output created: chyba.pdf", ["quarto"], base), [])
