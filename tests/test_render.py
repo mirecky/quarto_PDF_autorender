@@ -76,3 +76,39 @@ class HiddenWindowTest(unittest.TestCase):
         res = R._run(["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"],
                      input="ľščťžýáíé")
         self.assertEqual(res.stdout, "ľščťžýáíé")
+
+
+class LineMarkersTest(unittest.TestCase):
+    def lines(self, text):
+        import re
+        return [int(n) for n in re.findall(r'data-line="(\d+)"', R.add_line_markers(text))]
+
+    def test_blocks_marked_with_original_line_numbers(self):
+        text = "---\ntitle: X\n---\n\n# Nadpis\n\nOdsek\nďalší riadok\n\nDruhý odsek\n"
+        self.assertEqual(self.lines(text), [4, 6, 9])
+
+    def test_skips_code_math_divs_lists_and_captions(self):
+        text = "\n".join([
+            "```{python}", "", "# komentár", "", "```",   # 0-4 kód
+            "", "$$", "", "x", "$$",                       # 5-9 matematika
+            "", "::: {.callout-note}", "## T", "", "obsah", ":::",  # 10-15 callout
+            "", "- a", "", "- b",                          # 16-19 zoznam
+            "", "| a |", "|---|", "| 1 |", "", ": Popis",  # 20-25 tabuľka
+        ])
+        self.assertEqual(self.lines(text), [0, 6, 11, 17, 21])
+
+    def test_text_is_preserved(self):
+        text = "# A\n\ntext\n"
+        out = R.add_line_markers(text).split("\n")
+        # každá značka je samostatný riadok nasledovaný prázdnym riadkom
+        cleaned = []
+        skip = False
+        for line in out:
+            if skip:
+                skip = False
+                continue
+            if "qgui-line" in line:
+                skip = True
+                continue
+            cleaned.append(line)
+        self.assertEqual("\n".join(cleaned), text)
