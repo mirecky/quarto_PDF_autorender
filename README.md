@@ -62,6 +62,20 @@ Zástupca používa ikonu `assets/quarto.ico` (alternatíva: `assets/qgui.ico`);
 magick ikona.svg -background none -define icon:auto-resize=256,128,64,48,32,24,16 ikona.ico
 ```
 
+**Predvolená aplikácia pre .md a .qmd (Windows):**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\nastav-predvolenu-aplikaciu.ps1
+```
+
+Skript zaregistruje Quarto Studio pre aktuálneho používateľa (bez práv správcu) ako
+aplikáciu pre `.md`, `.qmd`, `.markdown` a `.Rmd`. Súbory `.qmd` sa potom otvárajú
+dvojklikom priamo; pri `.md` si Windows predvolenú aplikáciu chráni, preto ju treba raz
+potvrdiť: pravé tlačidlo na súbor → *Otvoriť pomocou* → *Vybrať inú aplikáciu* →
+*Quarto Studio* → *Vždy*. Otvorený súbor sa zobrazí v už bežiacej inštancii, ak jej
+pracovný priečinok súbor obsahuje; inak sa spustí nová s priečinkom súboru.
+Registráciu zruší parameter `-Remove`.
+
 **Linux / macOS:**
 
 ```bash
@@ -89,8 +103,8 @@ neuvedieš, otvorí sa naposledy použitý priečinok; pri prvom spustení (aleb
 (nadpis, zvýraznenie, odkaz, obrázok s krížovým odkazom, tabuľka s popisom, rovnica,
 citácia, poznámka pod čiarou, Quarto callout, blok kódu, zlom strany).
 
-**Správa súborov.** Strom pracovného priečinka, vytvorenie súboru (so vzorovou YAML
-hlavičkou) alebo priečinka; premenovanie a zmazanie cez kontextovú ponuku (pravé tlačidlo).
+**Správa súborov.** Strom pracovného priečinka, vytvorenie dokumentu `.qmd` (Quarto) alebo
+`.md` (Markdown/Pandoc) so vzorovou YAML hlavičkou, vytvorenie priečinka; premenovanie a zmazanie cez kontextovú ponuku (pravé tlačidlo).
 
 **Náhľad.**
 

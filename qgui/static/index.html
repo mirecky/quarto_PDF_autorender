@@ -101,6 +101,24 @@
 
 <footer id="status"><span id="status-text">Pripravené.</span><span id="status-root"></span></footer>
 
+<dialog id="new-dlg">
+  <form method="dialog" class="folder-form">
+    <h2>Nový dokument</h2>
+    <label class="field">Názov (môže obsahovať podpriečinok, napr. <code>kapitoly/uvod</code>)
+      <input id="new-name" autocomplete="off" required>
+    </label>
+    <div class="ext-choice">
+      <label><input type="radio" name="new-ext" value="qmd"> <b>.qmd</b> – Quarto (kód, krížové odkazy, callouty)</label>
+      <label><input type="radio" name="new-ext" value="md"> <b>.md</b> – Markdown (Pandoc, univerzálny)</label>
+    </div>
+    <p class="hint" id="new-hint"></p>
+    <div class="row end">
+      <button value="cancel" formnovalidate>Zrušiť</button>
+      <button value="create" class="primary">Vytvoriť</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="folder-dlg">
   <form method="dialog" class="folder-form">
     <h2>Pracovný priečinok</h2>

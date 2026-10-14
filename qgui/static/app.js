@@ -9,7 +9,7 @@ const DOC_LIKE = /\.(md|qmd|rmd|markdown|ya?ml|bib|csl|tex|css|scss|lua|typ|json
 const state = {
   path: null, dirty: false, settings: null, outputs: [], tree: [],
   rendering: false, previewTimer: null, previewSeq: 0, saving: false,
-  version: 0, savedVersion: 0, autosaveTimer: null,
+  version: 0, savedVersion: 0, autosaveTimer: null, savePromise: null, lastSaveError: null,
 };
 
 /* ------------------------------------------------------------------ util */
@@ -17,7 +17,12 @@ async function api(url, body) {
   const opt = body === undefined ? {} : {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   };
-  const res = await fetch(url, opt);
+  let res;
+  try {
+    res = await fetch(url, opt);
+  } catch (e) { // server neodpovedá / spojenie prerušené – nikdy nevyhodiť výnimku
+    return { ok: false, error: "server neodpovedá (" + (e && e.message || e) + ")" };
+  }
   let data;
   try { data = await res.json(); } catch { data = { ok: false, error: `HTTP ${res.status}` }; }
   if (!res.ok && data.ok !== false) data.ok = false;
@@ -221,11 +226,30 @@ $("#tree").addEventListener("contextmenu", async (e) => {
 });
 $("#only-docs").addEventListener("change", renderTree);
 $("#btn-refresh").addEventListener("click", loadTree);
-$("#btn-new").addEventListener("click", async () => {
+// Po návrate do okna obnoviť zoznam (súbory sa mohli zmeniť v Prieskumníkovi).
+window.addEventListener("focus", () => { if (state.root) loadTree(); });
+$("#btn-new").addEventListener("click", () => {
   const dir = state.path && state.path.includes("/") ? state.path.replace(/[^/]+$/, "") : "";
-  let name = prompt("Názov nového súboru (napr. kapitoly/uvod.qmd):", dir + "novy-dokument.qmd");
+  const ext = store.get("newExt", "qmd");
+  $("#new-name").value = dir + "novy-dokument";
+  $$('input[name="new-ext"]').forEach((r) => (r.checked = r.value === ext));
+  updateNewHint();
+  $("#new-dlg").showModal();
+  $("#new-name").select();
+});
+function newFileName() {
+  const ext = ($('input[name="new-ext"]:checked') || {}).value || "qmd";
+  const name = $("#new-name").value.trim().replace(/\.(qmd|md)$/i, "");
+  return name ? `${name}.${ext}` : "";
+}
+function updateNewHint() { $("#new-hint").textContent = newFileName() ? "Vytvorí sa: " + newFileName() : ""; }
+$("#new-name").addEventListener("input", updateNewHint);
+$$('input[name="new-ext"]').forEach((r) => r.addEventListener("change", updateNewHint));
+$("#new-dlg").addEventListener("close", async () => {
+  if ($("#new-dlg").returnValue !== "create") return;
+  const name = newFileName();
   if (!name) return;
-  if (!/\.[a-z0-9]+$/i.test(name)) name += ".qmd";
+  store.set("newExt", name.split(".").pop());
   const r = await api("/api/new", { path: name });
   if (!r.ok) return status(r.error, "error");
   await loadTree();
@@ -253,7 +277,10 @@ function updateTitle() {
 async function openFile(path) {
   if (!(await leaveCurrentFile())) return;
   const r = await api("/api/file?path=" + encodeURIComponent(path));
-  if (!r.ok) return status(r.error, "error");
+  if (!r.ok) {
+    loadTree(); // súbor mohol byť premenovaný alebo zmazaný mimo aplikácie
+    return status(`Súbor „${path}“ sa nedá otvoriť: ${r.error} Zoznam súborov bol obnovený.`, "error");
+  }
   state.path = r.path;
   editor.setMode(r.path);
   editor.set(r.content);
@@ -270,26 +297,38 @@ async function openFile(path) {
   editor.focus();
 }
 const autosaveOn = () => $("#auto-save").checked;
-/** Uloží súbor. auto = automatické uloženie (bez renderu a bez Quarto náhľadu). */
+/** Uloží súbor. auto = automatické uloženie (bez renderu a bez Quarto náhľadu).
+ *  Prebiehajúce ukladanie sa nikdy neprekrýva: ďalšie volanie počká na jeho koniec. */
 async function save({ silent = false, auto = false } = {}) {
   if (!state.path) return false;
-  if (state.saving) { if (auto) scheduleAutosave(); return false; }
+  while (state.savePromise) await state.savePromise.catch(() => {});
+  if (auto && !state.dirty) return true;
   clearTimeout(state.autosaveTimer);
-  state.saving = true;
   const path = state.path, version = state.version, content = editor.get();
-  const r = await api("/api/file", { path, content });
-  state.saving = false;
-  if (!r.ok) { status("Uloženie zlyhalo: " + r.error, "error"); return false; }
+  let r;
+  state.saving = true;
+  state.savePromise = api("/api/file", { path, content });
+  try {
+    r = await state.savePromise;
+  } finally {
+    state.saving = false;
+    state.savePromise = null;
+  }
+  if (!r.ok) {
+    state.lastSaveError = r.error;
+    status("Uloženie zlyhalo: " + r.error + (auto ? " – skúsim znova o 5 s." : ""), "error");
+    if (auto) scheduleAutosave(5000);
+    return false;
+  }
+  state.lastSaveError = null;
   if (path !== state.path) return true; // medzičasom sa otvoril iný súbor
   state.savedVersion = version;
   setDirty(state.version !== version); // počas ukladania mohol pribudnúť text
-  const time = new Date().toLocaleTimeString("sk-SK");
+  $("#autosave-info").textContent = `uložené ${new Date().toLocaleTimeString("sk-SK")}`;
   if (auto) {
-    $("#autosave-info").textContent = `uložené ${time}`;
     if (state.dirty) scheduleAutosave();
     return true;
   }
-  $("#autosave-info").textContent = `uložené ${time}`;
   if (!silent) status(`Uložené: ${path}`, "success");
   if ($("#preview-mode").value === "quarto") schedulePreview(0);
   if ($("#auto-render").checked && DOC_EXT.test(path)) doRender();
@@ -303,7 +342,13 @@ function scheduleAutosave(delay = 1500) {
 /** Pred prechodom na iný súbor/priečinok: uloží (autoukladanie) alebo sa opýta. */
 async function leaveCurrentFile() {
   if (!state.dirty) return true;
-  if (autosaveOn()) return save({ auto: true });
+  if (autosaveOn()) {
+    status("Ukladám pred prepnutím…", "busy");
+    if (await save({ auto: true }) && !state.dirty) return true;
+    return confirm(`Súbor „${state.path}“ sa nepodarilo uložiť` +
+      (state.lastSaveError ? ` (${state.lastSaveError})` : "") +
+      ".\n\nPrepnúť aj tak? Neuložené zmeny sa stratia.");
+  }
   return confirm("Neuložené zmeny sa stratia. Pokračovať?");
 }
 editor.onChange(() => {
@@ -716,8 +761,18 @@ async function loadWorkspace() {
   $("#preview-frame").srcdoc = "";
   await loadSettings();
   await loadTree();
-  const last = store.get(lastFileKey(), null);
   const exists = (items, p) => items.some((i) => (i.dir ? exists(i.children, p) : i.path === p));
+  // ?open=súbor – otvorenie z Prieskumníka (dvojklik na .md/.qmd)
+  const params = new URLSearchParams(location.search);
+  const wanted = params.get("open");
+  if (wanted) {
+    history.replaceState(null, "", location.pathname);
+    if (exists(state.tree, wanted)) return openFile(wanted);
+    // súbor môže byť skrytý filtrom stromu – skúsiť ho otvoriť priamo
+    const r = await api("/api/file?path=" + encodeURIComponent(wanted));
+    if (r.ok) return openFile(wanted);
+  }
+  const last = store.get(lastFileKey(), null);
   if (last && exists(state.tree, last)) return openFile(last);
   const first = (function find(items) {
     for (const i of items) {

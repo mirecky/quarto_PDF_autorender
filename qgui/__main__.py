@@ -9,9 +9,12 @@ do ~/.qgui/qgui.log a chyby sa zobrazia v dialógovom okne.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import threading
 import traceback
+import urllib.parse
+import urllib.request
 import webbrowser
 from pathlib import Path
 
@@ -47,9 +50,26 @@ def message(text: str, error: bool = True) -> None:
         pass
 
 
+def find_running(host: str, port: int, file: Path) -> str | None:
+    """URL bežiacej inštancie, ktorej pracovný priečinok obsahuje súbor (s ?open=...)."""
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # localhost nikdy cez proxy
+    for p in range(port, port + 20):
+        try:
+            with opener.open(f"http://{host}:{p}/api/info", timeout=0.3) as r:
+                info = json.loads(r.read().decode("utf-8"))
+        except (OSError, ValueError):
+            continue
+        root = Path(info.get("root") or "")
+        if info.get("ok") and root.is_dir() and (root == file.parent or root in file.parents):
+            rel = file.relative_to(root).as_posix()
+            return f"http://{host}:{p}/?open=" + urllib.parse.quote(rel)
+    return None
+
+
 def run() -> int:
     ap = argparse.ArgumentParser(prog="qgui", description="GUI pre Markdown/Quarto: úpravy, náhľad, render do PDF.")
-    ap.add_argument("folder", nargs="?", help="pracovný priečinok (predvolene naposledy použitý)")
+    ap.add_argument("folder", nargs="?",
+                    help="pracovný priečinok alebo súbor .md/.qmd na otvorenie (predvolene naposledy použitý priečinok)")
     ap.add_argument("--choose", action="store_true", help="vždy zobraziť dialóg na výber priečinka")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
@@ -59,6 +79,16 @@ def run() -> int:
         print(f"Ignorované neznáme argumenty: {' '.join(unknown)}", file=sys.stderr)
 
     folder = args.folder
+    open_rel = None
+    if folder and Path(folder).expanduser().is_file():
+        # Otvorenie konkrétneho súboru (dvojklik v Prieskumníkovi / „Otvoriť pomocou“).
+        file = Path(folder).expanduser().resolve()
+        running = find_running(args.host, args.port, file)
+        if running:
+            webbrowser.open(running)
+            print(f"Súbor otvorený v bežiacej inštancii: {running}")
+            return 0
+        folder, open_rel = str(file.parent), file.name
     if not folder and not args.choose:
         folder = desktop.last_folder()
     if not folder:
@@ -84,10 +114,11 @@ def run() -> int:
         return 3
     desktop.remember_folder(root)
     url = f"http://{args.host}:{srv.server_address[1]}/"
+    open_url = url + ("?open=" + urllib.parse.quote(open_rel) if open_rel else "")
     print(f"qgui beží na {url}  (pracovný priečinok: {root})\n"
           f"Ukončenie: tlačidlo „Ukončiť“ v aplikácii alebo Ctrl+C")
     if not args.no_browser:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.6, lambda: webbrowser.open(open_url)).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 import mimetypes
 import shutil
@@ -20,7 +21,9 @@ EDITABLE = {".md", ".qmd", ".rmd", ".markdown", ".txt", ".yml", ".yaml", ".bib",
             ".tex", ".css", ".scss", ".lua", ".json", ".typ", ".html"}
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".quarto", "renv", ".venv", "venv"}
 
-NEW_FILE_TEMPLATE = """---
+NEW_FILE_TEMPLATES = {
+    # Quarto: YAML s formátom a nastaveniami PDF
+    ".qmd": """---
 title: "{title}"
 author: ""
 date: today
@@ -34,7 +37,20 @@ format:
 # Úvod
 
 Text dokumentu.
-"""
+""",
+    # Markdown (Pandoc): jednoduchá hlavička, bez Quarto-špecifických kľúčov
+    ".md": """---
+title: "{title}"
+author: ""
+date: "{date}"
+lang: sk
+---
+
+# Úvod
+
+Text dokumentu.
+""",
+}
 
 
 class Workspace:
@@ -226,7 +242,8 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     content = data.get("content")
                     if content is None:
-                        content = NEW_FILE_TEMPLATE.format(title=p.stem) if p.suffix.lower() in (".md", ".qmd") else ""
+                        tpl = NEW_FILE_TEMPLATES.get(p.suffix.lower(), "")
+                        content = tpl.format(title=p.stem, date=datetime.date.today().strftime("%d. %m. %Y"))
                     p.write_text(content, encoding="utf-8")
                 return self._json({"ok": True, "path": ws.rel(p)})
             if path == "/api/rename":
