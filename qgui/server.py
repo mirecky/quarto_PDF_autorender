@@ -16,12 +16,14 @@ from pathlib import Path
 
 from . import desktop
 from . import render as R
+from . import templates as T
 
 STATIC = Path(__file__).parent / "static"
 SETTINGS_FILE = ".qgui.json"
 EDITABLE = {".md", ".qmd", ".rmd", ".markdown", ".txt", ".yml", ".yaml", ".bib", ".csl",
             ".tex", ".css", ".scss", ".lua", ".json", ".typ", ".html"}
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".quarto", "renv", ".venv", "venv"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".quarto", "renv", ".venv", "venv",
+             "site_libs", "_freeze"}  # knižnice a cache Quarto projektov
 
 NEW_FILE_TEMPLATES = {
     # Quarto: YAML s formátom a nastaveniami PDF
@@ -227,6 +229,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(self.ws.resolve(path[len("/raw/"):]), "download" in q)
             if path == "/api/info":
                 return self._json({"ok": True, "root": str(self.ws.root), "tools": R.tool_versions()})
+            if path == "/api/templates":
+                return self._json({"ok": True, "items": T.catalog()})
             if path == "/api/pending":
                 return self._json({"ok": True, "open": self.ws.claim_open(q.get("token", [""])[0])})
             if path == "/api/workspace":
@@ -238,9 +242,15 @@ class Handler(BaseHTTPRequestHandler):
                 p = self.ws.resolve(q.get("path", [""])[0])
                 if not p.is_file():
                     return self._err("Súbor neexistuje.", 404)
+                info = R.project_info(p)
+                project = None
+                if info and info["type"] != "default" and (info["dir"] == self.ws.root
+                                                           or self.ws.root in info["dir"].parents):
+                    project = {"dir": self.ws.rel(info["dir"]) if info["dir"] != self.ws.root else "",
+                               "type": info["type"]}
                 return self._json({"ok": True, "path": self.ws.rel(p),
                                    "content": p.read_text(encoding="utf-8", errors="replace"),
-                                   "mtime": p.stat().st_mtime})
+                                   "mtime": p.stat().st_mtime, "project": project})
             if path == "/api/settings":
                 return self._json({"ok": True, **self.ws.load_settings()})
             if path == "/api/command":
@@ -269,9 +279,15 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "mtime": p.stat().st_mtime})
             if path == "/api/new":
                 p = ws.resolve(data["path"])
-                if p.exists():
+                if p.exists() and not data.get("kind"):
                     return self._err("Súbor už existuje.", 409)
                 p.parent.mkdir(parents=True, exist_ok=True)
+                if data.get("kind"):
+                    try:
+                        main = T.create(p, data["kind"])
+                    except FileExistsError as exc:
+                        return self._err(str(exc), 409)
+                    return self._json({"ok": True, "path": ws.rel(main)})
                 if data.get("dir"):
                     p.mkdir()
                 else:
@@ -328,6 +344,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True})
             if path == "/api/preview":
                 p = ws.resolve(data["path"])
+                info = R.project_info(p) if data.get("mode") == "real" else None
+                if info and info["type"] != "default":
+                    with ws.preview_lock:
+                        res = R.preview_project(p, info)
+                    if res.get("ok"):
+                        out = Path(res.pop("path"))
+                        if ws.root not in out.resolve().parents:
+                            return self._json({"ok": False, "log": "Výstup projektu je mimo pracovného priečinka."})
+                        res["url"] = "/raw/" + urllib.parse.quote(ws.rel(out)) + "?v=" + str(time.time())
+                    res["base"] = ""
+                    return self._json(res)
                 if data.get("mode") == "real":
                     with ws.preview_lock:  # naraz najviac jeden reálny náhľad
                         res = R.preview_real(p, data.get("content", ""), data.get("settings") or {},
@@ -337,6 +364,21 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     res = R.preview_pandoc(p, data.get("content", ""))
                 res["base"] = "/raw/" + urllib.parse.quote(ws.rel(p.parent) + "/" if p.parent != ws.root else "")
+                return self._json(res)
+            if path == "/api/render-project":
+                p = ws.resolve(data["path"])
+                info = R.project_info(p)
+                if not info or info["type"] == "default":
+                    return self._err("Súbor nepatrí do projektu (web, kniha).", 400)
+                lock = ws.lock(str(info["dir"]))
+                if not lock.acquire(blocking=False):
+                    return self._err("Projekt sa práve renderuje.", 409)
+                try:
+                    res = R.render_project(info["dir"])
+                finally:
+                    lock.release()
+                res["outputs"] = [ws.rel(Path(o)) for o in res["outputs"]
+                                  if ws.root in Path(o).resolve().parents]
                 return self._json(res)
             if path == "/api/render":
                 p = ws.resolve(data["path"])

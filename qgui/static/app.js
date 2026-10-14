@@ -228,32 +228,64 @@ $("#only-docs").addEventListener("change", renderTree);
 $("#btn-refresh").addEventListener("click", loadTree);
 // Po návrate do okna obnoviť zoznam (súbory sa mohli zmeniť v Prieskumníkovi).
 window.addEventListener("focus", () => { if (state.root) loadTree(); });
+const PROJECT_KINDS = { website: "web", book: "kniha" };
+const PROJECT_FILES = {
+  website: "_quarto.yml, index.qmd, about.qmd, styles.css",
+  book: "_quarto.yml, index.qmd, uvod.qmd, zaver.qmd, literatura.qmd, literatura.bib",
+};
 $("#btn-new").addEventListener("click", () => {
   const dir = state.path && state.path.includes("/") ? state.path.replace(/[^/]+$/, "") : "";
-  const ext = store.get("newExt", "qmd");
-  $("#new-name").value = dir + "novy-dokument";
-  $$('input[name="new-ext"]').forEach((r) => (r.checked = r.value === ext));
+  $("#new-type").value = store.get("newKind", "qmd");
+  $("#new-name").value = dir + defaultNewName($("#new-type").value);
   updateNewHint();
   $("#new-dlg").showModal();
   $("#new-name").select();
 });
-function newFileName() {
-  const ext = ($('input[name="new-ext"]:checked') || {}).value || "qmd";
-  const name = $("#new-name").value.trim().replace(/\.(qmd|md)$/i, "");
-  return name ? `${name}.${ext}` : "";
+function defaultNewName(kind) {
+  const base = { revealjs: "prezentacia", beamer: "prezentacia", pptx: "prezentacia", dashboard: "dashboard",
+                 website: "moj-web", book: "moja-kniha" }[kind] || "novy-dokument";
+  // voľný názov: prezentacia, prezentacia-2, … (podľa stromu súborov)
+  const dir = state.path && state.path.includes("/") ? state.path.replace(/[^/]+$/, "") : "";
+  const taken = new Set();
+  (function walk(items) { for (const i of items) { taken.add(i.path.replace(/\.(qmd|md)$/i, "")); if (i.dir) walk(i.children); } })(state.tree);
+  let name = base, n = 2;
+  while (taken.has(dir + name)) name = `${base}-${n++}`;
+  return name;
 }
-function updateNewHint() { $("#new-hint").textContent = newFileName() ? "Vytvorí sa: " + newFileName() : ""; }
+function newFileName() {
+  const kind = $("#new-type").value;
+  const name = $("#new-name").value.trim().replace(/\.(qmd|md)$/i, "").replace(/\/+$/, "");
+  if (!name) return "";
+  if (PROJECT_KINDS[kind]) return name;
+  return `${name}.${kind === "md" ? "md" : "qmd"}`;
+}
+function updateNewHint() {
+  const kind = $("#new-type").value, name = newFileName();
+  $("#new-name-label").textContent = PROJECT_KINDS[kind]
+    ? "Názov priečinka projektu" : "Názov (môže obsahovať podpriečinok, napr. kapitoly/uvod)";
+  $("#new-hint").textContent = !name ? "" : PROJECT_KINDS[kind]
+    ? `Vytvorí sa priečinok ${name}/ so súbormi: ${PROJECT_FILES[kind]}`
+    : `Vytvorí sa: ${name}`;
+}
 $("#new-name").addEventListener("input", updateNewHint);
-$$('input[name="new-ext"]').forEach((r) => r.addEventListener("change", updateNewHint));
+$("#new-type").addEventListener("change", () => {
+  // predvolený názov podľa typu, ak ho používateľ nemenil
+  const v = $("#new-name").value.replace(/^.*\//, "");
+  if (/^(novy-dokument|prezentacia|dashboard|moj-web|moja-kniha)(-\d+)?$/.test(v) || !v) {
+    $("#new-name").value = $("#new-name").value.replace(/[^/]*$/, defaultNewName($("#new-type").value));
+  }
+  updateNewHint();
+});
 $("#new-dlg").addEventListener("close", async () => {
   if ($("#new-dlg").returnValue !== "create") return;
-  const name = newFileName();
+  const name = newFileName(), kind = $("#new-type").value;
   if (!name) return;
-  store.set("newExt", name.split(".").pop());
-  const r = await api("/api/new", { path: name });
+  store.set("newKind", kind);
+  const r = await api("/api/new", { path: name, kind });
   if (!r.ok) return status(r.error, "error");
   await loadTree();
-  openFile(r.path);
+  await openFile(r.path);
+  status(PROJECT_KINDS[kind] ? `Projekt vytvorený: ${name}/ – ▶ Projekt ho celý vyrenderuje.` : `Vytvorené: ${r.path}`, "success");
 });
 $("#btn-newdir").addEventListener("click", async () => {
   const name = prompt("Názov nového priečinka:");
@@ -291,6 +323,13 @@ async function openFile(path) {
   updateTitle();
   store.set(lastFileKey(), r.path);
   status(`Otvorené: ${r.path}`);
+  state.project = r.project || null;
+  const bp = $("#btn-render-project");
+  bp.hidden = !state.project;
+  if (state.project) {
+    const kind = { website: "web", book: "kniha", manuscript: "manuskript" }[state.project.type] || state.project.type;
+    bp.textContent = `▶ Projekt (${kind})`;
+  }
   resetViews();
   schedulePreview(0);
   editor.focus();
@@ -413,6 +452,8 @@ async function doRealPreview() {
   const path = state.path;
   let r;
   try {
+    // Stránka projektu sa renderuje z uloženého súboru (kvôli navigácii a štýlom projektu).
+    if (state.project && state.dirty && autosaveOn()) await save({ auto: true });
     r = await api("/api/preview", { path, content: editor.get(), mode: "real", settings: activeSettings() });
   } finally {
     state.realBusy = false;
@@ -423,8 +464,31 @@ async function doRealPreview() {
   if (!r.ok) return previewError(describeFailure(r, "Náhľad zlyhal (posledný úspešný zostáva zobrazený)"));
   previewError(null);
   if (r.note) status(r.note);
+  if (state.project && state.dirty) status("Náhľad projektu zobrazuje uloženú verziu súboru (Ctrl+S).");
   if (r.kind === "pdf") await showPdfPreview(r.url + "?v=" + Date.now());
+  else if (r.kind === "page") showUrlPreview(r.url);
   else showHtmlPreview(r.html, r.base, false);
+}
+/** Náhľad stránky projektu priamo z _site/_book – funguje navigácia a štýly projektu. */
+function showUrlPreview(url) {
+  const frame = $("#preview-frame");
+  $("#pdf-view").hidden = true;
+  frame.hidden = false;
+  let scroll = 0;
+  try {
+    const d = frame.contentDocument.documentElement;
+    scroll = d.scrollTop / Math.max(1, d.scrollHeight - d.clientHeight);
+  } catch { /* prázdny rámec */ }
+  frame.onload = () => {
+    try {
+      const win = frame.contentWindow;
+      win.addEventListener("scroll", () => syncScroll("preview"), { passive: true });
+      const d = frame.contentDocument.documentElement;
+      d.scrollTop = scroll * (d.scrollHeight - d.clientHeight);
+    } catch { /* ignorovať */ }
+  };
+  frame.removeAttribute("srcdoc");
+  frame.src = url;
 }
 
 function showHtmlPreview(html, base, pandocCss) {
@@ -634,7 +698,10 @@ async function doRender() {
     state.rendering = false;
     $("#btn-render").disabled = false;
   }
-
+  showRenderResult(r, t0);
+}
+/** Zobrazí výsledok renderu (súboru aj projektu): log, výstup, chyby. */
+function showRenderResult(r, t0 = performance.now()) {
   const log = $("#log");
   const cmd = (r.cmd || []).map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(" ");
   log.innerHTML = (cmd ? `<span class="cmd">$ ${esc(cmd)}</span>\n\n` : "") + esc(r.log || r.error || "");
@@ -669,6 +736,22 @@ async function doRender() {
   }
 }
 $("#btn-render").addEventListener("click", () => doRender());
+async function doRenderProject() {
+  if (!state.project || state.rendering) return;
+  if (state.dirty && !(await save({ silent: true }))) return;
+  state.rendering = true;
+  $("#btn-render").disabled = $("#btn-render-project").disabled = true;
+  status(`Renderujem celý projekt ${state.project.dir || "(koreň)"}…`, "busy");
+  let r;
+  try {
+    r = await api("/api/render-project", { path: state.path });
+  } finally {
+    state.rendering = false;
+    $("#btn-render").disabled = $("#btn-render-project").disabled = false;
+  }
+  showRenderResult(r);
+}
+$("#btn-render-project").addEventListener("click", doRenderProject);
 
 function refreshOutputSelect() {
   const sel = $("#output-select");
@@ -698,6 +781,7 @@ function resetViews() {
   Object.assign(pdfView, { doc: null, pages: [], url: null });
   pdfView.el.replaceChildren();
   pdfView.el.scrollTop = 0;
+  $("#preview-frame").removeAttribute("src");
   $("#preview-frame").srcdoc = "";
   previewError(null);
 }
