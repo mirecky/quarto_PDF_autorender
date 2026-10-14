@@ -8,7 +8,9 @@ from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".qgui"
 CONFIG_FILE = CONFIG_DIR / "config.json"
-MAX_RECENT = 10
+# Aktuálny priečinok + 5 predošlých (v okne sa zobrazí 5). Poradie podľa posledného
+# použitia: otvorený priečinok ide navrch, najstarší vypadne.
+MAX_RECENT = 6
 
 _dialog_lock = threading.Lock()
 
@@ -31,7 +33,7 @@ def save_config(data: dict) -> None:
 
 def recent_folders() -> list[str]:
     """Nedávne priečinky (najnovší prvý), iba tie, ktoré ešte existujú."""
-    return [f for f in load_config().get("recent", []) if Path(f).is_dir()]
+    return [f for f in load_config().get("recent", []) if Path(f).is_dir()][:MAX_RECENT]
 
 
 def last_folder() -> str | None:
@@ -43,7 +45,8 @@ def remember_folder(folder: Path) -> None:
     folder_s = str(Path(folder).resolve())
     cfg = load_config()
     recent = [f for f in cfg.get("recent", []) if f != folder_s]
-    cfg["recent"] = [folder_s, *recent][:MAX_RECENT]
+    # neexistujúce priečinky sa pri aktualizácii zabudnú, aby nezaberali miesto
+    cfg["recent"] = [folder_s, *[f for f in recent if Path(f).is_dir()]][:MAX_RECENT]
     save_config(cfg)
 
 

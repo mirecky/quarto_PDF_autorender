@@ -93,8 +93,9 @@ Prehliadač sa otvorí automaticky (`--no-browser` to potlačí). Argument urču
 **pracovný priečinok** – aplikácia pristupuje výhradne k súborom v ňom. Ak ho
 neuvedieš, otvorí sa naposledy použitý priečinok; pri prvom spustení (alebo s prepínačom
 `--choose`) sa zobrazí dialóg na jeho výber. Za behu sa priečinok mení tlačidlom
-**📂 názov priečinka** v hornej lište, ktoré ponúka aj zoznam nedávnych priečinkov
-(uložený v `~/.qgui/config.json`).
+**📂 názov priečinka** v hornej lište, ktoré ponúka aj zoznam 5 naposledy použitých
+priečinkov (uložený v `~/.qgui/config.json`; otvorený priečinok sa presunie navrch,
+najstarší sa zabudne).
 
 ## Funkcie
 

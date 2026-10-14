@@ -37,5 +37,22 @@ class RecentFoldersTest(unittest.TestCase):
         self.assertIsNone(desktop.last_folder())
 
 
+    def test_limit_and_order_by_use(self):
+        base = Path(self.tmp.name)
+        dirs = []
+        for i in range(8):
+            d = base / f"p{i}"
+            d.mkdir()
+            dirs.append(d)
+            desktop.remember_folder(d)
+        recent = desktop.recent_folders()
+        self.assertEqual(len(recent), desktop.MAX_RECENT)                 # aktuálny + 5
+        self.assertEqual(recent[0], str(dirs[7].resolve()))               # najnovší navrchu
+        self.assertNotIn(str(dirs[0].resolve()), recent)                  # najstarší zabudnutý
+        desktop.remember_folder(dirs[3])                                  # opätovné použitie
+        self.assertEqual(desktop.recent_folders()[0], str(dirs[3].resolve()))
+        self.assertEqual(len(desktop.recent_folders()), desktop.MAX_RECENT)
+
+
 if __name__ == "__main__":
     unittest.main()
