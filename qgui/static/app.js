@@ -520,7 +520,12 @@ async function doRender() {
       showOutput(state.outputs[0]);
       status(`Hotovo (${secs} s): ${state.outputs.join(", ")}`, "success");
     } else {
-      status(`Hotovo (${secs} s), výstupný súbor sa však nenašiel – pozri log.`, "success");
+      status(`Hotovo (${secs} s), výstupný súbor sa však nenašiel – pozri log.`, "error");
+      $("#output-frame").removeAttribute("src");
+      $("#output-empty").hidden = false;
+      $("#output-empty").innerHTML = `<p>Render prebehol, ale výstupný súbor sa nenašiel.<br>
+        Pozri záložku <b>Log</b> – posledný riadok „Output created:“ ukazuje, kam sa uložil.</p>`;
+      switchTab("output");
     }
     loadTree();
   } else {

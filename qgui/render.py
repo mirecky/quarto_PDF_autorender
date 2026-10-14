@@ -252,6 +252,26 @@ def _move(p: Path, target_dir: Path) -> Path:
     return target
 
 
+_OUTPUT_CREATED_RE = re.compile(r"^\s*Output created:\s*(.+?)\s*$", re.M)
+
+
+def reported_outputs(log: str, cmd: list[str], base: Path) -> list[Path]:
+    """Výstupy, ktoré nahlásil nástroj: Quarto riadkom „Output created:“, Pandoc parametrom -o."""
+    paths = [m.group(1).strip().strip('"') for m in _OUTPUT_CREATED_RE.finditer(log or "")]
+    if "-o" in cmd[:-1]:
+        paths.append(cmd[cmd.index("-o") + 1])
+    out = []
+    for raw in paths:
+        p = Path(raw)
+        if not p.is_absolute():
+            p = base / p
+        if p.is_file():
+            p = p.resolve()
+            if p not in out:
+                out.append(p)
+    return out
+
+
 def render(src: Path, settings: dict) -> dict:
     s = merged(settings)
     cmd, out_dir = build_command(src, s)
@@ -267,23 +287,38 @@ def render(src: Path, settings: dict) -> dict:
     except subprocess.TimeoutExpired as exc:
         return {"ok": False, "cmd": cmd, "log": f"Prekročený časový limit ({exc.timeout} s).", "outputs": []}
 
+    # 1) Čo nahlásil samotný nástroj (Quarto: „Output created: …“, Pandoc: -o) – spoľahlivé
+    #    aj pri vlastnom názve výstupu (output-file v YAML) či inom priečinku.
+    reported = reported_outputs(log, cmd, src.parent if not project else project)
     if project:
-        outputs = _find_project_outputs(project, src, start)
+        outputs = reported or _find_project_outputs(project, src, start)
     else:
-        outputs = _find_outputs(src, [d for d in {out_dir, src.parent} if d], start)
+        # 2) Záloha: súbory s rovnakým menom ako zdroj, vytvorené počas renderu.
+        found = _find_outputs(src, [d for d in {out_dir, src.parent} if d], start)
         fmt = (s["format"] or "").strip()
         if fmt:  # ponechať iba prípony zodpovedajúce zvolenému formátu
             wanted = {FORMAT_EXT.get(fmt, fmt)} | ({"pdf"} if fmt in PDF_FORMATS else set())
-            outputs = [p for p in outputs if p.suffix.lstrip(".") in wanted]
+            found = [p for p in found if p.suffix.lstrip(".") in wanted]
+        outputs = list(dict.fromkeys(reported + [p for p in found if p not in reported]))
         if code == 0 and out_dir and out_dir != src.parent:
             moved = []
             for p in outputs:
-                moved.append(_move(p, out_dir) if p.parent == src.parent else p)
-            # Pomocné súbory HTML výstupu (obrázky, knižnice) musia ísť spolu s ním.
-            files_dir = src.parent / f"{src.stem}_files"
-            if any(p.suffix == ".html" for p in moved) and files_dir.is_dir():
-                _move(files_dir, out_dir)
+                if p.parent == src.parent:
+                    target = _move(p, out_dir)
+                    # Pomocné súbory HTML výstupu (obrázky, knižnice) musia ísť spolu s ním.
+                    # (Quarto ich pomenuje podľa výstupu alebo podľa zdroja.)
+                    if p.suffix == ".html":
+                        for stem in dict.fromkeys((p.stem, src.stem)):
+                            files_dir = src.parent / f"{stem}_files"
+                            if files_dir.is_dir():
+                                _move(files_dir, out_dir)
+                    moved.append(target)
+                else:
+                    moved.append(p)
             outputs = moved
+    if code == 0 and not outputs:
+        log += ("\n[Quarto Studio] Výstupný súbor sa nenašiel. Skontroluj v YAML hlavičke "
+                "kľúče output-file / output-dir, prípadne priečinok projektu (_quarto.yml).\n")
     return {
         "ok": code == 0,
         "code": code,
