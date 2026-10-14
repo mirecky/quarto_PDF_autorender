@@ -17,6 +17,7 @@ FORMAT_EXT = {
     "beamer": "pdf",
     "html": "html",
     "revealjs": "html",
+    "dashboard": "html",
     "docx": "docx",
     "odt": "odt",
     "epub": "epub",
@@ -131,10 +132,60 @@ def merged(settings: dict | None) -> dict:
     return s
 
 
+# Typy dokumentov, ktorých formát určuje samotný dokument (YAML) – profil ho neprebije.
+OWN_FORMATS = {"revealjs", "beamer", "pptx", "dashboard"}
+
+
+def _first_format_in_yaml(yaml: str) -> str:
+    f = _YAML_FORMAT_RE.search(yaml or "")
+    if not f:
+        return ""
+    if f.group(1):
+        return f.group(1).strip("\"'")
+    sub = _YAML_SUBKEY_RE.search(yaml, f.end())
+    return sub.group(1) if sub else ""
+
+
+def project_info(src: Path) -> dict | None:
+    """Údaje o Quarto projekte, do ktorého súbor patrí (typ, výstupný priečinok)."""
+    proj = find_project(src)
+    if not proj:
+        return None
+    cfg_file = proj / "_quarto.yml" if (proj / "_quarto.yml").exists() else proj / "_quarto.yaml"
+    cfg = cfg_file.read_text(encoding="utf-8", errors="replace")
+    m = re.search(r"^project:\s*\n(?:[ \t]+.*\n)*?[ \t]+type:\s*([\w-]+)", cfg, re.M)
+    ptype = m.group(1) if m else "default"
+    m = re.search(r"^[ \t]+output-dir:\s*[\"']?([^\"'\n]+)", cfg, re.M)
+    out = m.group(1).strip() if m else {"website": "_site", "book": "_book"}.get(ptype, "")
+    return {"dir": proj, "type": ptype, "output_dir": out,
+            "format": _first_format_in_yaml(cfg) or "html"}
+
+
+def effective_format(src: Path, profile_format: str, content: str | None = None) -> str:
+    """Formát, ktorým sa súbor naozaj renderuje.
+
+    - súbor v Quarto projekte (web, kniha): formát z _quarto.yml (projekt určuje vzhľad),
+    - prezentácia alebo dashboard (formát v YAML hlavičke): formát dokumentu,
+    - inak formát profilu ("" = podľa YAML hlavičky).
+    """
+    info = project_info(src)
+    if info and info["type"] != "default":
+        return info["format"]
+    if content is None:
+        try:
+            content = src.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            content = ""
+    own = _yaml_first_format(content)
+    if own in OWN_FORMATS:
+        return own
+    return profile_format
+
+
 def build_command(src: Path, settings: dict) -> tuple[list[str], Path | None]:
     """Vráti (príkaz, očakávaný výstupný adresár). Príkaz sa spúšťa s cwd = src.parent."""
     s = merged(settings)
-    fmt = (s["format"] or "").strip()
+    fmt = effective_format(src, (s["format"] or "").strip())
     out_dir_rel = (s["output_dir"] or "").strip()
     out_dir = (src.parent / out_dir_rel).resolve() if out_dir_rel else src.parent
     is_pdfish = fmt in PDF_FORMATS or fmt == ""
@@ -490,7 +541,8 @@ def _hide(path: Path) -> None:
             pass
 
 
-PREVIEWABLE = {"pdf", "beamer", "typst", "html", "revealjs"}
+PREVIEWABLE = {"pdf", "beamer", "typst", "html", "revealjs", "dashboard"}
+HTML_FORMATS = {"html", "revealjs", "dashboard"}
 
 
 def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict:
@@ -502,14 +554,14 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     v náhľade nahradia HTML.
     """
     s = merged(settings)
-    fmt = (s["format"] or "").strip() or _yaml_first_format(content) or "html"
+    fmt = effective_format(src, (s["format"] or "").strip(), content) or _yaml_first_format(content) or "html"
     note = ""
     if fmt not in PREVIEWABLE:
         note = f"Formát „{fmt}“ sa nedá zobraziť v prehliadači – náhľad je v HTML."
         fmt = "html"
     if s["engine"] == "pandoc" and fmt == "typst":
         fmt, s["pdf_engine"] = "pdf", "typst"
-    is_html = fmt in ("html", "revealjs")
+    is_html = fmt in HTML_FORMATS
     s["format"] = fmt
     s["output_dir"] = str(out_dir)
     if is_html:
@@ -524,7 +576,8 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
 
     tmp = src.parent / f".qgui-preview-{os.getpid()}-{int(time.time() * 1000)}{src.suffix}"
     try:
-        tmp.write_text(add_line_markers(content) if is_html else content, encoding="utf-8")
+        # značky riadkov iba pre bežné HTML (v prezentácii/dashboarde by menili rozloženie)
+        tmp.write_text(add_line_markers(content) if fmt == "html" else content, encoding="utf-8")
         _hide(tmp)
         res = render(tmp, s)
     finally:
@@ -541,3 +594,45 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     if is_html:
         result["html"] = out.read_text(encoding="utf-8", errors="replace")
     return result
+
+
+# --------------------------------------------------------------------------- projekty
+
+def render_project(project: Path, timeout: int = 1200) -> dict:
+    """quarto render celého projektu (formáty a výstupy podľa _quarto.yml)."""
+    exe = _which("quarto") or "quarto"
+    cmd = [exe, "render"]
+    start = time.time()
+    try:
+        res = _run(cmd, cwd=project, timeout=timeout)
+        code, log = res.returncode, _ANSI_RE.sub("", (res.stdout or "") + (res.stderr or ""))
+    except FileNotFoundError:
+        return {"ok": False, "cmd": cmd, "log": f"Program sa nenašiel: {exe}", "outputs": []}
+    except subprocess.TimeoutExpired as exc:
+        return {"ok": False, "cmd": cmd, "log": f"Prekročený časový limit ({exc.timeout} s).", "outputs": []}
+    outputs = reported_outputs(log, cmd, project)
+    info = project_info(project / "_quarto.yml") or {}
+    index = project / (info.get("output_dir") or "") / "index.html"
+    if index.is_file() and index.resolve() not in outputs:
+        outputs.insert(0, index.resolve())
+    # hlavný výstup: index.html webu/knihy, inak prvý nahlásený
+    outputs.sort(key=lambda p: (p.name != "index.html", p.suffix != ".html"))
+    return {**(diagnose(log) if code else {}), "ok": code == 0, "code": code, "cmd": cmd, "log": log,
+            "outputs": [str(p) for p in outputs], "seconds": round(time.time() - start, 2)}
+
+
+def preview_project(src: Path, info: dict) -> dict:
+    """Náhľad stránky/kapitoly projektu: uložený súbor sa vyrenderuje do HTML v rámci projektu
+    (_site, _book), aby fungovala navigácia a štýly projektu."""
+    exe = _which("quarto") or "quarto"
+    cmd = [exe, "render", src.name, "--to", "html"]
+    try:
+        res = _run(cmd, cwd=src.parent, timeout=600)
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "log": "Náhľad prekročil časový limit."}
+    log = _ANSI_RE.sub("", (res.stdout or "") + (res.stderr or ""))
+    outs = [o for o in (reported_outputs(log, cmd, info["dir"]) or reported_outputs(log, cmd, src.parent))
+            if o.suffix == ".html"]
+    if res.returncode != 0 or not outs:
+        return {"ok": False, "log": log or "Náhľad sa nepodarilo vytvoriť.", **diagnose(log)}
+    return {"ok": True, "kind": "page", "path": outs[0], "log": log}

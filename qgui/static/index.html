@@ -24,6 +24,7 @@
     <select id="profile"></select>
     <button id="btn-settings" title="Nastavenia renderu">⚙ Nastavenia</button>
     <button id="btn-render" class="primary" title="Renderovať (Ctrl+Enter)">▶ Renderovať</button>
+    <button id="btn-render-project" title="Vyrenderovať celý projekt podľa _quarto.yml" hidden>▶ Projekt</button>
   </div>
   <div class="group">
     <label class="chk" title="Živý náhľad počas písania"><input type="checkbox" id="live-preview" checked> živý náhľad</label>
@@ -106,14 +107,30 @@
 
 <dialog id="new-dlg">
   <form method="dialog" class="folder-form">
-    <h2>Nový dokument</h2>
-    <label class="field">Názov (môže obsahovať podpriečinok, napr. <code>kapitoly/uvod</code>)
+    <h2>Nový</h2>
+    <label class="field">Typ
+      <select id="new-type">
+        <optgroup label="Dokumenty">
+          <option value="qmd">Dokument Quarto (.qmd) – kód, krížové odkazy, callouty</option>
+          <option value="md">Dokument Markdown (.md) – Pandoc, univerzálny</option>
+        </optgroup>
+        <optgroup label="Prezentácie">
+          <option value="revealjs">Prezentácia Reveal.js – HTML v prehliadači</option>
+          <option value="beamer">Prezentácia Beamer – PDF (LaTeX)</option>
+          <option value="pptx">Prezentácia PowerPoint – PPTX</option>
+        </optgroup>
+        <optgroup label="Ďalšie">
+          <option value="dashboard">Dashboard – HTML s kartami</option>
+        </optgroup>
+        <optgroup label="Projekty (priečinok s _quarto.yml)">
+          <option value="website">Webová stránka</option>
+          <option value="book">Kniha (HTML + PDF)</option>
+        </optgroup>
+      </select>
+    </label>
+    <label class="field"><span id="new-name-label">Názov (môže obsahovať podpriečinok, napr. <code>kapitoly/uvod</code>)</span>
       <input id="new-name" autocomplete="off" required>
     </label>
-    <div class="ext-choice">
-      <label><input type="radio" name="new-ext" value="qmd"> <b>.qmd</b> – Quarto (kód, krížové odkazy, callouty)</label>
-      <label><input type="radio" name="new-ext" value="md"> <b>.md</b> – Markdown (Pandoc, univerzálny)</label>
-    </div>
     <p class="hint" id="new-hint"></p>
     <div class="row end">
       <button value="cancel" formnovalidate>Zrušiť</button>
@@ -160,6 +177,7 @@
           <option value="beamer">Beamer (PDF prezentácia)</option>
           <option value="html">HTML</option>
           <option value="revealjs">Reveal.js prezentácia</option>
+          <option value="dashboard">Dashboard (HTML)</option>
           <option value="docx">Word (DOCX)</option>
           <option value="odt">OpenDocument (ODT)</option>
           <option value="pptx">PowerPoint (PPTX)</option>

@@ -103,8 +103,23 @@ neuvedieš, otvorí sa naposledy použitý priečinok; pri prvom spustení (aleb
 (nadpis, zvýraznenie, odkaz, obrázok s krížovým odkazom, tabuľka s popisom, rovnica,
 citácia, poznámka pod čiarou, Quarto callout, blok kódu, zlom strany).
 
-**Správa súborov.** Strom pracovného priečinka, vytvorenie dokumentu `.qmd` (Quarto) alebo
-`.md` (Markdown/Pandoc) so vzorovou YAML hlavičkou, vytvorenie priečinka; premenovanie a zmazanie cez kontextovú ponuku (pravé tlačidlo).
+**Nový dokument alebo projekt.** Tlačidlo **＋** ponúka typ a podľa neho vytvorí hlavičku
+a ukážkový obsah:
+
+| Typ | Výsledok |
+|:--|:--|
+| Dokument Quarto / Markdown | `.qmd` (PDF, obsah, číslovanie) / `.md` (Pandoc) |
+| Prezentácia Reveal.js / Beamer / PowerPoint | `.qmd` s `format: revealjs` / `beamer` / `pptx` |
+| Dashboard | `.qmd` s `format: dashboard` a kartami |
+| Webová stránka | priečinok s `_quarto.yml` (website), `index.qmd`, `about.qmd`, `styles.css` |
+| Kniha | priečinok s `_quarto.yml` (book), kapitolami a bibliografiou (HTML + PDF) |
+
+Formát prezentácie a dashboardu určuje dokument, nie profil (profil „PDF“ z prezentácie
+nespraví článok). Súbory v projekte sa renderujú podľa `_quarto.yml`; tlačidlo
+**▶ Projekt** vyrenderuje celý web alebo knihu a zobrazí úvodnú stránku s navigáciou.
+Náhľad stránky projektu sa vytvára z uloženého súboru priamo v `_site`/`_book`.
+
+**Správa súborov.** Strom pracovného priečinka, vytvorenie priečinka; premenovanie a zmazanie cez kontextovú ponuku (pravé tlačidlo).
 
 **Náhľad.** Obnovuje sa automaticky počas písania; do súborov používateľa nič nezapisuje.
 
