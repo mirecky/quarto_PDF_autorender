@@ -57,6 +57,25 @@ DEFAULT_SETTINGS = {
 }
 
 
+def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
+    """subprocess.run so skrytým oknom na Windows a s kódovaním UTF-8.
+
+    Pri spustení cez pythonw (bez konzoly) by Windows pre každý konzolový program
+    (pandoc, quarto) otvoril nové okno terminálu, ktoré by kradlo fokus editoru.
+    """
+    kwargs.setdefault("capture_output", True)
+    kwargs.setdefault("text", True)
+    kwargs.setdefault("encoding", "utf-8")
+    kwargs.setdefault("errors", "replace")
+    if os.name == "nt":
+        kwargs["creationflags"] = kwargs.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 0  # SW_HIDE
+        kwargs["startupinfo"] = si
+    return subprocess.run(cmd, **kwargs)
+
+
 def _which(name: str) -> str | None:
     env = os.environ.get("QGUI_" + name.upper())
     if env and Path(env).exists():
@@ -72,7 +91,7 @@ def tool_versions() -> dict:
             out[tool] = None
             continue
         try:
-            res = subprocess.run([exe, *args], capture_output=True, text=True, timeout=30)
+            res = _run([exe, *args], timeout=30)
             out[tool] = (res.stdout or res.stderr).splitlines()[0].strip()
         except Exception as exc:  # pragma: no cover - diagnostika
             out[tool] = f"chyba: {exc}"
@@ -241,9 +260,7 @@ def render(src: Path, settings: dict) -> dict:
         out_dir.mkdir(parents=True, exist_ok=True)
     start = time.time()
     try:
-        res = subprocess.run(
-            cmd, cwd=src.parent, capture_output=True, text=True, timeout=int(s["timeout"] or 600)
-        )
+        res = _run(cmd, cwd=src.parent, timeout=int(s["timeout"] or 600))
         code, log = res.returncode, (res.stdout or "") + (res.stderr or "")
     except FileNotFoundError:
         return {"ok": False, "cmd": cmd, "log": f"Program sa nenašiel: {cmd[0]}", "outputs": []}
@@ -292,7 +309,7 @@ def preview_pandoc(src: Path, content: str) -> dict:
     cmd = [exe, "-f", "markdown", "-t", "html5", "-s", f"--mathjax={MATHJAX_URL}",
            "--resource-path", str(src.parent), "--metadata", f"pagetitle={src.stem}"]
     try:
-        res = subprocess.run(cmd, input=text, capture_output=True, text=True, cwd=src.parent, timeout=60)
+        res = _run(cmd, input=text, cwd=src.parent, timeout=60)
     except subprocess.TimeoutExpired:
         return {"ok": False, "log": "Náhľad prekročil časový limit."}
     return {"ok": res.returncode == 0, "html": _POLYFILL_RE.sub("", res.stdout), "log": res.stderr}
@@ -312,7 +329,7 @@ def preview_quarto(src: Path, content: str) -> dict:
             fh.write(content)
         cmd = [exe, "render", tmp.name, "--to", "html", "-M", "embed-resources:true",
                "-M", "toc:true", "--quiet"]
-        res = subprocess.run(cmd, cwd=src.parent, capture_output=True, text=True, timeout=300)
+        res = _run(cmd, cwd=src.parent, timeout=300)
         if res.returncode != 0 or not html.exists():
             return {"ok": False, "log": res.stdout + res.stderr}
         return {"ok": True, "html": html.read_text(encoding="utf-8"), "log": res.stderr}

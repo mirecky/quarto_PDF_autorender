@@ -49,3 +49,30 @@ class WorkspaceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HiddenWindowTest(unittest.TestCase):
+    """Na Windows sa pandoc/quarto nesmú spúšťať vo viditeľnom okne terminálu."""
+
+    def test_windows_flags(self):
+        from unittest import mock
+
+        class FakeSI:
+            dwFlags = 0
+            wShowWindow = 1
+
+        with mock.patch.object(R.os, "name", "nt"), \
+             mock.patch.object(R.subprocess, "CREATE_NO_WINDOW", 0x08000000, create=True), \
+             mock.patch.object(R.subprocess, "STARTF_USESHOWWINDOW", 1, create=True), \
+             mock.patch.object(R.subprocess, "STARTUPINFO", FakeSI, create=True), \
+             mock.patch.object(R.subprocess, "run") as run:
+            R._run(["pandoc", "--version"])
+        kw = run.call_args.kwargs
+        self.assertTrue(kw["creationflags"] & 0x08000000)
+        self.assertEqual(kw["startupinfo"].wShowWindow, 0)
+        self.assertEqual(kw["encoding"], "utf-8")
+
+    def test_utf8_roundtrip(self):
+        res = R._run(["python3", "-c", "import sys; sys.stdout.write(sys.stdin.read())"],
+                     input="ľščťžýáíé")
+        self.assertEqual(res.stdout, "ľščťžýáíé")
