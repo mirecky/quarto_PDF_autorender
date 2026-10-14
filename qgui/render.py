@@ -299,13 +299,87 @@ def render(src: Path, settings: dict) -> dict:
 _CHUNK_RE = re.compile(r"^```\{(\w+)[^}]*\}", re.M)
 
 
+_FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
+_LIST_RE = re.compile(r"^([-*+]|\d+[.)]|#\.)\s")
+_DIV_OPEN_RE = re.compile(r"^:{3,}\s*\S")
+_DIV_CLOSE_RE = re.compile(r"^:{3,}\s*$")
+
+
+def add_line_markers(text: str) -> str:
+    """Pred začiatok každého bloku vloží prázdny <div data-line="N"> (N = riadok od 0).
+
+    Náhľad podľa nich synchronizuje posúvanie s editorom. Značky sa nevkladajú do
+    YAML hlavičky, blokov kódu, matematiky, komentárov, Quarto divov (callouty by
+    stratili titulok), medzi položky zoznamu ani pred popisy tabuliek (`: ...`).
+    """
+    lines = text.split("\n")
+    out: list[str] = []
+    fence = None
+    in_yaml = in_math = in_comment = False
+    div_depth = 0
+    prev_blank = True
+    in_list = False
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if i == 0 and s == "---":
+            in_yaml = True
+            out.append(line)
+            continue
+        if in_yaml:
+            out.append(line)
+            if s in ("---", "..."):
+                in_yaml, prev_blank = False, True
+            continue
+        if fence:
+            out.append(line)
+            if s and set(s) == {fence[0]} and len(s) >= len(fence):
+                fence = None
+            prev_blank = False
+            continue
+        if in_comment:
+            out.append(line)
+            in_comment = "-->" not in line
+            continue
+        if in_math:
+            out.append(line)
+            in_math = "$$" not in s
+            continue
+
+        indented = line[:1] in (" ", "\t")
+        is_list = bool(_LIST_RE.match(s)) and not indented
+        if s and not indented and not is_list:
+            in_list = False
+        block_start = (prev_blank and s and not indented and div_depth == 0
+                       and not (s.startswith(":") and not s.startswith(":::"))
+                       and not (is_list and in_list))
+        if block_start:
+            out += [f'<div class="qgui-line" data-line="{i}"></div>', ""]
+        out.append(line)
+
+        m = _FENCE_RE.match(s) if not indented else None
+        if m:
+            fence = m.group(1)
+        elif s.startswith("<!--") and "-->" not in s[4:]:
+            in_comment = True
+        elif s.startswith("$$") and s.count("$$") == 1:
+            in_math = True
+        elif _DIV_CLOSE_RE.match(s):
+            div_depth = max(0, div_depth - 1)
+        elif _DIV_OPEN_RE.match(s):
+            div_depth += 1
+        if is_list:
+            in_list = True
+        prev_blank = not s
+    return "\n".join(out)
+
+
 def preview_pandoc(src: Path, content: str) -> dict:
     """Rýchly HTML náhľad cez pandoc (bez vykonávania kódu)."""
     exe = _which("pandoc")
     if not exe:
         return {"ok": False, "log": "Pandoc nie je nainštalovaný – rýchly náhľad nie je dostupný."}
     # Quarto bloky ```{python} → ```python, aby ich pandoc zvýraznil ako kód.
-    text = _CHUNK_RE.sub(lambda m: "```" + m.group(1), content)
+    text = _CHUNK_RE.sub(lambda m: "```" + m.group(1), add_line_markers(content))
     cmd = [exe, "-f", "markdown", "-t", "html5", "-s", f"--mathjax={MATHJAX_URL}",
            "--resource-path", str(src.parent), "--metadata", f"pagetitle={src.stem}"]
     try:
@@ -326,7 +400,7 @@ def preview_quarto(src: Path, content: str) -> dict:
     files_dir = tmp.parent / f"{tmp.stem}_files"
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(content)
+            fh.write(add_line_markers(content))
         cmd = [exe, "render", tmp.name, "--to", "html", "-M", "embed-resources:true",
                "-M", "toc:true", "--quiet"]
         res = _run(cmd, cwd=src.parent, timeout=300)

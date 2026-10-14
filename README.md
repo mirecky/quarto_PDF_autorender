@@ -98,6 +98,14 @@ hlavičkou) alebo priečinka; premenovanie a zmazanie cez kontextovú ponuku (pr
   prvky (callouty, krížové odkazy `@fig-…`) sa nespracujú;
 - *plný (Quarto HTML)* – aktualizuje sa pri uložení, zodpovedá skutočnému výstupu Quarta.
 
+**Synchronizované posúvanie.** Editor a náhľad sa posúvajú spolu v oboch smeroch.
+Do náhľadu sa pred každý blok textu vkladajú neviditeľné značky s číslom riadku zdroja,
+takže zhoda je presná na úrovni odsekov a nadpisov (vypínateľné voľbou *synchr. posúvanie*).
+
+**Autoukladanie.** Súbor sa uloží 1,5 s po poslednej zmene, ako aj pri prepnutí súboru,
+priečinka alebo opustení okna. Automatické uloženie nespúšťa render ani plný Quarto
+náhľad – tie sa spúšťajú pri ručnom uložení (`Ctrl+S`).
+
 **Render.** Výstup sa ukladá do priečinka `_output/` vedľa zdrojového súboru (nastaviteľné)
 a zobrazí sa na záložke *Výstup* – PDF priamo vo vstavanom prehliadači PDF. Úplný výpis
 príkazu a jeho výstupu je na záložke *Log*. Voľba **auto-render** spúšťa render po každom

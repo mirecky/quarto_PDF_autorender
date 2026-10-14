@@ -16,6 +16,8 @@
   <div class="group">
     <button id="btn-save" title="Uložiť (Ctrl+S)">Uložiť</button>
     <span id="dirty" class="dirty" hidden>●</span>
+    <label class="chk" title="Automaticky uložiť 1,5 s po poslednej zmene (bez spúšťania renderu)"><input type="checkbox" id="auto-save" checked> autoukladanie</label>
+    <span id="autosave-info" class="autosave-info"></span>
   </div>
   <div class="group">
     <label class="lbl" for="profile">Profil</label>
@@ -24,8 +26,9 @@
     <button id="btn-render" class="primary" title="Renderovať (Ctrl+Enter)">▶ Renderovať</button>
   </div>
   <div class="group">
-    <label class="chk" title="Po každom uložení automaticky renderovať"><input type="checkbox" id="auto-render"> auto-render</label>
+    <label class="chk" title="Po každom ručnom uložení (Ctrl+S) automaticky renderovať; autoukladanie render nespúšťa"><input type="checkbox" id="auto-render"> auto-render</label>
     <label class="chk" title="Živý náhľad počas písania"><input type="checkbox" id="live-preview" checked> živý náhľad</label>
+    <label class="chk" title="Posúvanie editora a náhľadu spolu"><input type="checkbox" id="sync-scroll" checked> synchr. posúvanie</label>
     <select id="preview-mode" title="Spôsob náhľadu">
       <option value="pandoc">náhľad: rýchly (Pandoc)</option>
       <option value="quarto">náhľad: plný (Quarto HTML)</option>
