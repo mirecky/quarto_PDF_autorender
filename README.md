@@ -72,8 +72,8 @@ Skript zaregistruje Quarto Studio pre aktuálneho používateľa (bez práv spr�
 aplikáciu pre `.md`, `.qmd`, `.markdown` a `.Rmd`. Súbory `.qmd` sa potom otvárajú
 dvojklikom priamo; pri `.md` si Windows predvolenú aplikáciu chráni, preto ju treba raz
 potvrdiť: pravé tlačidlo na súbor → *Otvoriť pomocou* → *Vybrať inú aplikáciu* →
-*Quarto Studio* → *Vždy*. Otvorený súbor sa zobrazí v už bežiacej inštancii, ak jej
-pracovný priečinok súbor obsahuje; inak sa spustí nová s priečinkom súboru.
+*Quarto Studio* → *Vždy*. Súbor sa otvorí vo svojom priečinku (v Quarto projekte v koreni projektu): ak už beží
+inštancia s presne týmto priečinkom, použije sa, inak sa spustí nová.
 Registráciu zruší parameter `-Remove`.
 
 **Linux / macOS:**
