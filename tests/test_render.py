@@ -126,7 +126,11 @@ class PendingOpenTest(unittest.TestCase):
             self.assertIsNone(ws.claim_open("tok"))        # iba raz
             ws.request_open("b.md", "tok2")
             with mock.patch("qgui.server.time.time", return_value=ws.pending["t"] + 3):
-                self.assertEqual(ws.claim_open(""), "b.md")  # po 2,5 s ktokoľvek
+                self.assertIsNone(ws.claim_open(""))                       # skrytá karta nie
+                self.assertEqual(ws.claim_open("", visible=True), "b.md")  # viditeľná po 2,5 s
+            ws.request_open("c.md", "tok3")
+            with mock.patch("qgui.server.time.time", return_value=ws.pending["t"] + 21):
+                self.assertEqual(ws.claim_open(""), "c.md")                # napokon ktokoľvek
 
 
 class ReportedOutputsTest(unittest.TestCase):

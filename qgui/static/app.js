@@ -289,6 +289,18 @@ $("#new-dlg").addEventListener("close", async () => {
   await openFile(r.path);
   status(PROJECT_KINDS[kind] ? `Projekt vytvorený: ${name}/ – ▶ Projekt ho celý vyrenderuje.` : `Vytvorené: ${r.path}`, "success");
 });
+/** Rozbalí priečinky nad súborom a posunie strom tak, aby bol súbor vidieť. */
+function revealInTree(path) {
+  const parts = path.split("/");
+  if (parts.length > 1) {
+    const collapsed = new Set(store.get("collapsed", []));
+    let changed = false;
+    for (let i = 1; i < parts.length; i++) changed = collapsed.delete(parts.slice(0, i).join("/")) || changed;
+    if (changed) { store.set("collapsed", [...collapsed]); renderTree(); }
+  }
+  const node = [...$$(".node.file")].find((n) => n.dataset.path === path);
+  if (node) node.scrollIntoView({ block: "nearest" });
+}
 /** Priečinok, do ktorého sa vytvárajú nové súbory: vybraný klikom, inak priečinok otvoreného súboru. */
 function targetDir() {
   if (state.selectedDir !== null && state.selectedDir !== undefined) return state.selectedDir ? state.selectedDir + "/" : "";
@@ -342,6 +354,7 @@ async function openFile(path) {
   setDirty(false);
   updateTitle();
   store.set(lastFileKey(), r.path);
+  revealInTree(r.path);
   status(`Otvorené: ${r.path}`);
   state.project = r.project || null;
   const bp = $("#btn-render-project");
@@ -1093,7 +1106,8 @@ $("#recent-list").addEventListener("click", async (e) => {
 // vyzdvihne ktorákoľvek otvorená karta.
 async function checkPendingOpen() {
   if (!state.root || document.querySelector("dialog[open]")) return;
-  const r = await api("/api/pending");
+  const visible = document.visibilityState === "visible" ? 1 : 0;
+  const r = await api("/api/pending?visible=" + visible);
   if (!r.ok || !r.open) return;
   if (r.open !== state.path) await openFile(r.open);
   status(`Otvorené z Prieskumníka: ${r.open}`, "success");

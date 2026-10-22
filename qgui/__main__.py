@@ -61,14 +61,28 @@ def _local_json(url: str, body: dict | None = None, timeout: float = 0.5) -> dic
         return json.loads(r.read().decode("utf-8"))
 
 
+def workspace_for(file: Path) -> Path:
+    """Pracovný priečinok pre súbor otvorený z Prieskumníka: koreň Quarto projektu
+    (web, kniha), inak priečinok, v ktorom súbor leží."""
+    from .render import project_info
+    info = project_info(file)
+    if info and info["type"] != "default":
+        return info["dir"].resolve()
+    return file.parent.resolve()
+
+
 def open_in_running(host: str, port: int, file: Path, token: str) -> str | None:
-    """Ak beží inštancia, ktorej priečinok obsahuje súbor, zadá jej ho a vráti URL na otvorenie."""
+    """Ak beží inštancia s presne týmto pracovným priečinkom, zadá jej súbor a vráti URL.
+
+    Inštancia so širším (nadradeným) priečinkom sa nepoužije – súbor sa má otvoriť
+    vo svojom priečinku, nie napr. v celom MEGA/Desktop."""
+    target = workspace_for(file)
     for p in range(port, port + 20):
         base = f"http://{host}:{p}/"
         try:
             info = _local_json(base + "api/info", timeout=0.3)
             root = Path(info.get("root") or "")
-            if not (info.get("ok") and root.is_dir() and (root == file.parent or root in file.parents)):
+            if not (info.get("ok") and root.is_dir() and root.resolve() == target):
                 continue
             if _local_json(base + "api/open", {"path": str(file), "token": token}).get("ok"):
                 return base + "?t=" + token
@@ -98,9 +112,11 @@ def run() -> int:
         running = open_in_running(args.host, args.port, file, token)
         if running:
             webbrowser.open(running)
-            print(f"Súbor otvorený v bežiacej inštancii: {running}")
+            print(f"Súbor {file} otvorený v bežiacej inštancii: {running}")
             return 0
-        folder, open_rel = str(file.parent), file.name
+        root = workspace_for(file)
+        folder, open_rel = str(root), file.relative_to(root).as_posix()
+        print(f"Otváram {file} v novej inštancii (priečinok {root}).")
     if not folder and not args.choose:
         folder = desktop.last_folder()
     if not folder:

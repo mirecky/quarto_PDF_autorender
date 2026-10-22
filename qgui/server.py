@@ -68,14 +68,15 @@ class Workspace:
         self.preview_lock = threading.Lock()
 
     # --- otvorenie súboru zvonka (dvojklik v Prieskumníkovi)
-    PENDING_ANY_AFTER = 2.5   # s – potom si požiadavku vyzdvihne ľubovoľná karta
+    PENDING_VISIBLE_AFTER = 2.5  # s – potom si požiadavku vyzdvihne viditeľná karta (stratený token)
+    PENDING_ANY_AFTER = 20       # s – a napokon ľubovoľná karta
     PENDING_EXPIRE = 120      # s
 
     def request_open(self, rel: str, token: str = "") -> None:
         with self._guard:
             self.pending = {"rel": rel, "token": token, "t": time.time()}
 
-    def claim_open(self, token: str = "") -> str | None:
+    def claim_open(self, token: str = "", visible: bool = False) -> str | None:
         with self._guard:
             p = self.pending
             if not p:
@@ -84,7 +85,8 @@ class Workspace:
             if age > self.PENDING_EXPIRE:
                 self.pending = None
                 return None
-            if (token and token == p["token"]) or age > self.PENDING_ANY_AFTER:
+            if ((token and token == p["token"]) or (visible and age > self.PENDING_VISIBLE_AFTER)
+                    or age > self.PENDING_ANY_AFTER):
                 self.pending = None
                 return p["rel"]
             return None
@@ -232,7 +234,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/templates":
                 return self._json({"ok": True, "items": T.catalog()})
             if path == "/api/pending":
-                return self._json({"ok": True, "open": self.ws.claim_open(q.get("token", [""])[0])})
+                return self._json({"ok": True, "open": self.ws.claim_open(
+                    q.get("token", [""])[0], q.get("visible", ["0"])[0] == "1")})
             if path == "/api/workspace":
                 return self._json({"ok": True, "root": str(self.ws.root),
                                    "recent": [f for f in desktop.recent_folders() if f != str(self.ws.root)]})
