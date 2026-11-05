@@ -516,6 +516,7 @@ function showUrlPreview(url) {
     try {
       const win = frame.contentWindow;
       win.addEventListener("scroll", () => syncScroll("preview"), { passive: true });
+      hookFrameZoom();
       const d = frame.contentDocument.documentElement;
       d.scrollTop = scroll * (d.scrollHeight - d.clientHeight);
     } catch { /* ignorovať */ }
@@ -545,6 +546,7 @@ function showHtmlPreview(html, base, pandocCss) {
     try {
       const win = frame.contentWindow;
       win.addEventListener("scroll", () => syncScroll("preview"), { passive: true });
+      hookFrameZoom();
       // Obrázky a MathJax menia výšky až po načítaní – znovu zosynchronizovať.
       win.addEventListener("load", () => syncScroll("editor"));
       if (syncOn()) syncScroll("editor", true);
@@ -560,14 +562,17 @@ function showHtmlPreview(html, base, pandocCss) {
 /* PDF náhľad cez pdf.js: pozícia sa pri obnovení zachová, stránky sa kreslia podľa potreby. */
 const pdfView = {
   el: $("#pdf-view"), doc: null, pages: [], url: null, gen: 0, observer: null,
-  async load(url) {
+  async load(url, { keepRatio = false } = {}) {
     const gen = ++this.gen;
     const first = !this.doc;
+    // pri zmene zoomu zachovať relatívnu pozíciu (zvisle aj vodorovne)
+    const ratioY = this.el.scrollTop / Math.max(1, this.el.scrollHeight);
+    const ratioX = (this.el.scrollLeft + this.el.clientWidth / 2) / Math.max(1, this.el.scrollWidth);
     let doc;
     try {
       doc = await pdfjsLib.getDocument({ url, isEvalSupported: false }).promise;
     } catch (e) { return previewError("PDF sa nepodarilo načítať: " + e.message); }
-    const width = Math.max(200, this.el.clientWidth - 32);
+    const width = Math.max(200, this.el.clientWidth - 32) * zoom.value;
     const pages = [];
     for (let i = 1; i <= doc.numPages; i++) {
       const page = await doc.getPage(i);
@@ -586,7 +591,8 @@ const pdfView = {
       box.appendChild(d);
     });
     // Pred výmenou vykresliť strany, ktoré sú práve vidieť → bez blikania.
-    const top = this.el.scrollTop, h = this.el.clientHeight;
+    const total = pages.reduce((a, p) => a + p.vp.height + 12, 32);
+    const top = keepRatio ? ratioY * total : this.el.scrollTop, h = this.el.clientHeight;
     let y = 16;
     const visible = [];
     pages.forEach((p, i) => { if (y < top + h && y + p.vp.height > top) visible.push(i); y += p.vp.height + 12; });
@@ -595,6 +601,7 @@ const pdfView = {
     const old = this.doc;
     this.el.replaceChildren(box);
     this.el.scrollTop = top;
+    if (keepRatio) this.el.scrollLeft = Math.max(0, ratioX * this.el.scrollWidth - this.el.clientWidth / 2);
     Object.assign(this, { doc, pages, url });
     if (old) old.destroy();
     if (this.observer) this.observer.disconnect();
@@ -623,6 +630,46 @@ if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/vendor/pd
 pdfView.el.addEventListener("scroll", () => syncScroll("preview"), { passive: true });
 let reflowTimer;
 window.addEventListener("resize", () => { clearTimeout(reflowTimer); reflowTimer = setTimeout(() => pdfView.reflow(), 300); });
+
+/* zoom náhľadu: 100 % = na šírku panela; PDF sa prekreslí ostro, HTML cez CSS zoom */
+const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+const zoom = { value: ZOOM_STEPS.includes(store.get("previewZoom", 1)) ? store.get("previewZoom", 1) : 1 };
+function applyFrameZoom() {
+  try {
+    const doc = $("#preview-frame").contentDocument;
+    // prezentácie Reveal.js si veľkosť škálujú samy
+    if (doc && doc.documentElement && !doc.querySelector(".reveal")) doc.documentElement.style.zoom = zoom.value;
+  } catch { /* prázdny rámec */ }
+}
+let zoomTimer;
+function setZoom(v) {
+  const next = Math.min(3, Math.max(0.5, v));
+  if (next === zoom.value) return;
+  zoom.value = next;
+  store.set("previewZoom", next);
+  $("#zoom-reset").textContent = Math.round(next * 100) + " %";
+  if (pdfActive()) { clearTimeout(zoomTimer); zoomTimer = setTimeout(() => pdfView.url && pdfView.load(pdfView.url, { keepRatio: true }), 120); }
+  else applyFrameZoom();
+}
+function zoomStep(dir) {
+  const i = ZOOM_STEPS.findIndex((z) => z >= zoom.value - 1e-6);
+  setZoom(ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, (i < 0 ? ZOOM_STEPS.length - 1 : i) + dir))]);
+}
+function zoomWheel(e) {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  zoomStep(e.deltaY < 0 ? 1 : -1);
+}
+$("#zoom-in").addEventListener("click", () => zoomStep(1));
+$("#zoom-out").addEventListener("click", () => zoomStep(-1));
+$("#zoom-reset").addEventListener("click", () => setZoom(1));
+$("#zoom-reset").textContent = Math.round(zoom.value * 100) + " %";
+pdfView.el.addEventListener("wheel", zoomWheel, { passive: false });
+/** Po načítaní HTML náhľadu: zoom a Ctrl + koliesko aj vnútri rámca. */
+function hookFrameZoom() {
+  applyFrameZoom();
+  try { $("#preview-frame").contentWindow.addEventListener("wheel", zoomWheel, { passive: false }); } catch { /* ignorovať */ }
+}
 
 async function showPdfPreview(url) {
   if (!window.pdfjsLib) { // záloha bez pdf.js
@@ -840,6 +887,7 @@ function showOutput(path, { switchTo = true } = {}) {
 
 /* ------------------------------------------------------------------ záložky */
 function switchTab(name) {
+  $("#zoom-ctl").hidden = name !== "preview";
   $$(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   $$(".tab-body").forEach((b) => (b.hidden = b.id !== "tab-" + name));
   if (name === "log") $("#log-badge").hidden = true;

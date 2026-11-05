@@ -148,7 +148,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 
 /* reálny PDF náhľad (pdf.js) */
 .pdf-view { position: absolute; inset: 0; overflow: auto; background: #525659; }
-.pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px 0; }
+.pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px;
+  width: max-content; min-width: 100%; box-sizing: border-box; }  /* pri zväčšení vodorovné posúvanie */
 .pdf-page { background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); flex: none; }
 .pdf-page canvas { display: block; width: 100%; height: 100%; }
 .preview-error {
@@ -159,3 +160,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .preview-error .close { position: absolute; top: 4px; right: 6px; border: none; background: none; color: inherit; }
 .busy-spin { display: inline-block; animation: spin 1s linear infinite; color: var(--accent); }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+.zoom-ctl { display: inline-flex; align-items: center; gap: 2px; margin-right: 6px; }
+.zoom-ctl button { border: none; background: none; padding: 2px 7px; font-size: 13px; min-width: 26px; }
+.zoom-ctl button:hover { background: var(--panel); }
+#zoom-reset { min-width: 52px; font-variant-numeric: tabular-nums; color: var(--muted); }
