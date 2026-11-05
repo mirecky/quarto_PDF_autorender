@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Náhľad – Quarto Studio</title>
+<link rel="icon" type="image/svg+xml" href="/static/quarto.svg">
+<link rel="stylesheet" href="/static/style.css">
+<style>
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; flex-direction: column; }
+  #pw-bar {
+    display: flex; align-items: center; gap: 8px; padding: 5px 10px; flex: none;
+    background: var(--panel2); border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  #pw-title { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #pw-body { flex: 1; position: relative; min-height: 0; }
+  #pw-body iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: #fff; }
+  #pw-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); text-align: center; }
+  #pw-back { white-space: nowrap; }
+</style>
+</head>
+<body>
+<div id="pw-bar">
+  <span id="pw-title">Náhľad</span>
+  <span id="pw-busy" class="busy-spin" hidden title="Náhľad sa pripravuje">⟳</span>
+  <span class="spacer"></span>
+  <span class="zoom-ctl" title="Zoom (aj Ctrl + koliesko myši); okno sa prispôsobí šírke strany">
+    <button id="pw-out" title="Zmenšiť">−</button>
+    <button id="pw-zoom" title="Skutočná veľkosť (100 %)">100 %</button>
+    <button id="pw-in" title="Zväčšiť">+</button>
+    <button id="pw-fit" title="Prispôsobiť okno strane a výške obrazovky">⤢</button>
+  </span>
+  <button id="pw-back" title="Zavrieť okno a vrátiť náhľad do aplikácie">⇤ Späť do aplikácie</button>
+</div>
+<div id="pw-body">
+  <iframe id="pw-frame" title="Náhľad" hidden></iframe>
+  <div id="pw-pdf" class="pdf-view" hidden></div>
+  <div id="pw-error" class="preview-error" hidden><span class="msg"></span></div>
+  <div id="pw-empty"><p>Čakám na náhľad z aplikácie…</p></div>
+</div>
+<script src="/static/vendor/pdfjs/pdf.min.js"></script>
+<script src="/static/pdfview.js"></script>
+<script src="/static/preview-window.js"></script>
+</body>
+</html>

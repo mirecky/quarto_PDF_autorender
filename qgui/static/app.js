@@ -452,6 +452,7 @@ function schedulePreview(delay) {
   state.previewTimer = setTimeout(doPreview, delay);
 }
 function previewError(msg) {
+  if (typeof publish === "function") publish({ type: "error", text: msg || "" });
   const box = $("#preview-error");
   if (!msg) { box.hidden = true; return; }
   box.querySelector(".msg").textContent = msg;
@@ -482,6 +483,7 @@ async function doRealPreview() {
   if (state.realBusy) { state.realPending = true; return; } // po dokončení ešte raz
   state.realBusy = true;
   $("#preview-busy").hidden = false;
+  publish({ type: "busy", on: true });
   const path = state.path;
   let r;
   try {
@@ -491,6 +493,7 @@ async function doRealPreview() {
   } finally {
     state.realBusy = false;
     $("#preview-busy").hidden = true;
+    publish({ type: "busy", on: false });
   }
   if (state.realPending) { state.realPending = false; schedulePreview(150); }
   if (path !== state.path || previewMode() !== "real") return;
@@ -503,7 +506,7 @@ async function doRealPreview() {
   else showHtmlPreview(r.html, r.base, false);
 }
 /** Náhľad stránky projektu priamo z _site/_book – funguje navigácia a štýly projektu. */
-function showUrlPreview(url) {
+function localUrlPreview(url) {
   const frame = $("#preview-frame");
   $("#pdf-view").hidden = true;
   frame.hidden = false;
@@ -525,7 +528,7 @@ function showUrlPreview(url) {
   frame.src = url;
 }
 
-function showHtmlPreview(html, base, pandocCss) {
+function localHtmlPreview(html, base, pandocCss) {
   const frame = $("#preview-frame");
   $("#pdf-view").hidden = true;
   frame.hidden = false;
@@ -559,74 +562,12 @@ function showHtmlPreview(html, base, pandocCss) {
   frame.srcdoc = html;
 }
 
-/* PDF náhľad cez pdf.js: pozícia sa pri obnovení zachová, stránky sa kreslia podľa potreby. */
-const pdfView = {
-  el: $("#pdf-view"), doc: null, pages: [], url: null, gen: 0, observer: null,
-  async load(url, { keepRatio = false } = {}) {
-    const gen = ++this.gen;
-    const first = !this.doc;
-    // pri zmene zoomu zachovať relatívnu pozíciu (zvisle aj vodorovne)
-    const ratioY = this.el.scrollTop / Math.max(1, this.el.scrollHeight);
-    const ratioX = (this.el.scrollLeft + this.el.clientWidth / 2) / Math.max(1, this.el.scrollWidth);
-    let doc;
-    try {
-      doc = await pdfjsLib.getDocument({ url, isEvalSupported: false }).promise;
-    } catch (e) { return previewError("PDF sa nepodarilo načítať: " + e.message); }
-    const width = Math.max(200, this.el.clientWidth - 32) * zoom.value;
-    const pages = [];
-    for (let i = 1; i <= doc.numPages; i++) {
-      const page = await doc.getPage(i);
-      const base = page.getViewport({ scale: 1 });
-      pages.push({ page, vp: page.getViewport({ scale: width / base.width }) });
-    }
-    if (gen !== this.gen) { doc.destroy(); return; } // medzičasom prišiel novší náhľad
-    const box = document.createElement("div");
-    box.className = "pdf-pages";
-    pages.forEach((p, i) => {
-      const d = document.createElement("div");
-      d.className = "pdf-page";
-      d.style.width = p.vp.width + "px";
-      d.style.height = p.vp.height + "px";
-      d.dataset.i = i;
-      box.appendChild(d);
-    });
-    // Pred výmenou vykresliť strany, ktoré sú práve vidieť → bez blikania.
-    const total = pages.reduce((a, p) => a + p.vp.height + 12, 32);
-    const top = keepRatio ? ratioY * total : this.el.scrollTop, h = this.el.clientHeight;
-    let y = 16;
-    const visible = [];
-    pages.forEach((p, i) => { if (y < top + h && y + p.vp.height > top) visible.push(i); y += p.vp.height + 12; });
-    await Promise.all(visible.map((i) => this.drawPage(pages[i], box.children[i])));
-    if (gen !== this.gen) { doc.destroy(); return; }
-    const old = this.doc;
-    this.el.replaceChildren(box);
-    this.el.scrollTop = top;
-    if (keepRatio) this.el.scrollLeft = Math.max(0, ratioX * this.el.scrollWidth - this.el.clientWidth / 2);
-    Object.assign(this, { doc, pages, url });
-    if (old) old.destroy();
-    if (this.observer) this.observer.disconnect();
-    this.observer = new IntersectionObserver((entries) => entries.forEach((en) => {
-      if (en.isIntersecting) this.drawPage(this.pages[+en.target.dataset.i], en.target);
-    }), { root: this.el, rootMargin: "800px 0px" });
-    [...box.children].forEach((c) => this.observer.observe(c));
-    if (first) syncScroll("editor", true);
-  },
-  async drawPage(p, div) {
-    if (!p || div.dataset.done) return;
-    div.dataset.done = "1";
-    const dpr = window.devicePixelRatio || 1;
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.floor(p.vp.width * dpr);
-    canvas.height = Math.floor(p.vp.height * dpr);
-    try {
-      await p.page.render({ canvasContext: canvas.getContext("2d"), viewport: p.vp,
-        transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
-      div.appendChild(canvas);
-    } catch { delete div.dataset.done; } // dokument medzitým nahradený
-  },
-  reflow() { if (this.url && !this.el.hidden) this.load(this.url); },
-};
-if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdfjs/pdf.worker.min.js";
+/* PDF náhľad v paneli (spoločná implementácia v pdfview.js) */
+const pdfView = createPdfView($("#pdf-view"), {
+  scaleFor: (bw) => (Math.max(200, $("#pdf-view").clientWidth - 32) * zoom.value) / bw,
+  onError: (m) => previewError(m),
+  onFirst: () => syncScroll("editor", true),
+});
 pdfView.el.addEventListener("scroll", () => syncScroll("preview"), { passive: true });
 let reflowTimer;
 window.addEventListener("resize", () => { clearTimeout(reflowTimer); reflowTimer = setTimeout(() => pdfView.reflow(), 300); });
@@ -671,7 +612,7 @@ function hookFrameZoom() {
   try { $("#preview-frame").contentWindow.addEventListener("wheel", zoomWheel, { passive: false }); } catch { /* ignorovať */ }
 }
 
-async function showPdfPreview(url) {
+async function localPdfPreview(url) {
   if (!window.pdfjsLib) { // záloha bez pdf.js
     $("#pdf-view").hidden = true;
     const frame = $("#preview-frame");
@@ -685,6 +626,84 @@ async function showPdfPreview(url) {
 
 $("#live-preview").addEventListener("change", () => { persistUi(); schedulePreview(0); });
 $("#preview-mode").addEventListener("change", () => { persistUi(); previewError(null); schedulePreview(0); });
+
+
+/* ------------------------------------------------------------------ samostatné okno náhľadu */
+const bus = "BroadcastChannel" in window ? new BroadcastChannel("qgui-preview") : null;
+const popup = { win: null, last: null, poll: null };
+const popupOpen = () => !!(popup.win && !popup.win.closed);
+function publish(msg) {
+  if (["pdf", "html", "page", "clear"].includes(msg.type)) popup.last = msg;
+  if (bus) bus.postMessage(msg);
+}
+/** Zobrazí náhľad: v samostatnom okne, ak je otvorené, inak v paneli. */
+function present(msg) {
+  publish(msg);
+  if (popupOpen()) return;
+  return renderLocal(msg);
+}
+function renderLocal(msg) {
+  if (!msg) return;
+  if (msg.type === "pdf") return localPdfPreview(msg.url);
+  if (msg.type === "html") return localHtmlPreview(msg.html, msg.base, msg.pandocCss);
+  if (msg.type === "page") return localUrlPreview(msg.url);
+}
+const showPdfPreview = (url) => present({ type: "pdf", url });
+const showHtmlPreview = (html, base, pandocCss) => present({ type: "html", html, base, pandocCss });
+const showUrlPreview = (url) => present({ type: "page", url });
+
+function setPopupState(open) {
+  $("#popup-note").hidden = !open;
+  $("#btn-popup").classList.toggle("on", open);
+  $("#btn-popup").title = open ? "Náhľad je v samostatnom okne – kliknutím ho prenesieš do popredia" : "Otvoriť náhľad v samostatnom okne";
+  if (open) { $("#preview-frame").hidden = true; pdfView.el.hidden = true; }
+  else {
+    clearInterval(popup.poll);
+    popup.win = null;
+    renderLocal(popup.last);
+  }
+}
+function openPopup() {
+  if (popupOpen()) { popup.win.focus(); return; }
+  // počiatočná veľkosť: výška obrazovky, šírka podľa strany (okno ju potom spresní)
+  const sw = screen.availWidth, sh = screen.availHeight;
+  const pz = store.get("popupZoom", 1) || 1;
+  const pagePx = pdfView.baseWidth() ? pdfView.baseWidth() * 96 / 72 * pz : 860 * pz;
+  const w = Math.min(sw, Math.round(pagePx + 80)), h = Math.max(400, sh - 80);
+  const left = (screen.availLeft || 0) + Math.max(0, sw - w), top = screen.availTop || 0;
+  popup.win = window.open("/static/preview.html", "qgui-preview",
+    `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+  if (!popup.win) return status("Prehliadač zablokoval nové okno – povoľ vyskakovacie okná pre 127.0.0.1.", "error");
+  setPopupState(true);
+  clearInterval(popup.poll);
+  popup.poll = setInterval(() => { if (!popupOpen()) setPopupState(false); }, 1000);
+}
+function closePopup() { if (bus) bus.postMessage({ type: "close-popup" }); if (popup.win) popup.win.close(); setPopupState(false); }
+if (bus) bus.onmessage = (e) => {
+  const m = e.data || {};
+  if (m.type === "popup-hello") {
+    if (!popup.win) { popup.win = { closed: false, focus() {} }; setPopupState(true); } // okno otvorené z inej karty
+    bus.postMessage({ type: "title", text: state.path || "" });
+    if (popup.last) bus.postMessage(popup.last);
+    publishScroll();
+  } else if (m.type === "popup-closing") {
+    setPopupState(false);
+  } else if (m.type === "popup-scroll" && syncOn() && editor.cm()) {
+    const cm = editor.cm(), info = cm.getScrollInfo();
+    syncState.ignore.editor = performance.now() + 150;
+    cm.scrollTo(null, m.ratio * Math.max(0, info.height - info.clientHeight));
+  }
+};
+function publishScroll() {
+  if (!popupOpen() || !syncOn() || !editor.cm()) return;
+  if (performance.now() < syncState.ignore.editor) return;
+  const info = editor.cm().getScrollInfo();
+  publish({ type: "scroll", ratio: info.top / Math.max(1, info.height - info.clientHeight) });
+}
+editor.onScroll(() => publishScroll());
+$("#btn-popup").addEventListener("click", () => (popupOpen() ? popup.win.focus() : openPopup()));
+$("#popup-return").addEventListener("click", closePopup);
+window.addEventListener("pagehide", () => { if (popup.win && popup.win.close) popup.win.close(); });
 
 /* ------------------------------------------------------------------ synchronizované posúvanie */
 const syncOn = () => $("#sync-scroll").checked;
@@ -855,12 +874,8 @@ function resetViews() {
   state.outputs = [];
   refreshOutputSelect();
   // náhľad predošlého súboru preč
-  pdfView.gen++;
-  if (pdfView.observer) pdfView.observer.disconnect();
-  if (pdfView.doc) pdfView.doc.destroy();
-  Object.assign(pdfView, { doc: null, pages: [], url: null });
-  pdfView.el.replaceChildren();
-  pdfView.el.scrollTop = 0;
+  pdfView.clear();
+  if (typeof publish === "function") { publish({ type: "clear" }); publish({ type: "title", text: state.path || "" }); }
   $("#preview-frame").removeAttribute("src");
   $("#preview-frame").srcdoc = "";
   previewError(null);
