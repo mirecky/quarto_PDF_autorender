@@ -132,6 +132,12 @@ súbory aj podpriečinky (📁) sa vytvoria v ňom (inak v priečinku otvorenéh
 - **zoom**: tlačidlá − / + vpravo hore v paneli náhľadu alebo `Ctrl` + koliesko myši nad
   náhľadom (50–300 %, 100 % = na šírku panela; kliknutím na percentá späť na 100 %).
   PDF sa pri zmene prekreslí ostro a pozícia v dokumente sa zachová; zoom sa pamätá;
+- **samostatné okno** (⧉ vedľa zoomu): náhľad v okne prehliadača, napr. na druhom monitore.
+  Obnovuje sa počas písania a posúva sa spolu s editorom. Okno má výšku obrazovky a šírku
+  podľa strany; zoom (− / + / Ctrl + koliesko, 100 % = skutočná veľkosť) mení aj šírku okna,
+  najviac po šírku obrazovky (⤢ okno znova prispôsobí). *⇤ Späť do aplikácie* alebo zatvorenie
+  okna vráti náhľad do panela. Ak prehliadač otvorí okno ako kartu, zoom funguje, len sa
+  nemení veľkosť okna;
 - *rýchly (HTML)* – okamžitý náhľad cez Pandoc bez vykonávania kódu; Quarto-špecifické
   prvky (callouty, krížové odkazy) sa nespracujú.
 

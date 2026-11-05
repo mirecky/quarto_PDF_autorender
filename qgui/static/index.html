@@ -90,6 +90,7 @@
         <button id="zoom-out" title="Zmenšiť">−</button>
         <button id="zoom-reset" title="Na šírku okna (100 %)">100 %</button>
         <button id="zoom-in" title="Zväčšiť">+</button>
+        <button id="btn-popup" title="Otvoriť náhľad v samostatnom okne">⧉</button>
       </span>
       <select id="output-select" hidden></select>
       <a id="btn-open-output" class="btnlink" target="_blank" hidden>Otvoriť ↗</a>
@@ -98,6 +99,8 @@
     <div class="tab-body" id="tab-preview">
       <iframe id="preview-frame" title="Náhľad"></iframe>
       <div id="pdf-view" class="pdf-view" hidden></div>
+      <div id="popup-note" class="empty" hidden><p>Náhľad je otvorený v samostatnom okne.<br><br>
+        <button id="popup-return">⇤ Vrátiť náhľad sem</button></p></div>
       <div id="preview-error" class="preview-error" hidden><span class="msg"></span><button class="close" title="Zavrieť">✕</button></div>
     </div>
     <div class="tab-body" id="tab-output" hidden>
@@ -244,6 +247,7 @@
 <script src="/static/vendor/codemirror/addon/search/searchcursor.js"></script>
 <script src="/static/vendor/codemirror/addon/search/search.js"></script>
 <script src="/static/vendor/pdfjs/pdf.min.js"></script>
+<script src="/static/pdfview.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
