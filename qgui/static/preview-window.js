@@ -11,7 +11,8 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem("qgui." + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("qgui." + k, JSON.stringify(v)); } catch { /* ignorovať */ } },
 };
-const st = { zoom: store.get("popupZoom", null), kind: null, fitted: false, ignoreScroll: 0 };
+const st = { zoom: store.get("popupZoom", null), kind: null, fitted: false, ignoreScroll: 0,
+  anchors: [], anchorsKey: "", lines: 1 };
 
 const pdf = createPdfView($("#pw-pdf"), {
   scaleFor: () => (st.zoom || 1) * 96 / 72,       // body PDF → CSS px pri danom zoome
@@ -75,6 +76,7 @@ function wheel(e) { if (e.ctrlKey) { e.preventDefault(); step(e.deltaY < 0 ? 1 :
 /* ---------------- zobrazenie obsahu z hlavného okna */
 async function show(msg) {
   showError(null);
+  if (msg.anchors) Object.assign(st, { anchors: msg.anchors, anchorsKey: msg.anchorsKey || "", lines: msg.lines || 1 });
   $("#pw-empty").hidden = true;
   const firstOfKind = st.kind !== (msg.type === "pdf" ? "pdf" : "html");
   st.kind = msg.type === "pdf" ? "pdf" : "html";
@@ -93,7 +95,8 @@ async function show(msg) {
         applyHtmlZoom();
         const win = frame.contentWindow, d = frame.contentDocument.documentElement;
         win.addEventListener("wheel", wheel, { passive: false });
-        win.addEventListener("scroll", () => sendScroll(d.scrollTop / Math.max(1, d.scrollHeight - d.clientHeight)), { passive: true });
+        ["wheel", "pointerdown", "keydown", "touchstart"].forEach((ev) => win.addEventListener(ev, markUser, { passive: true, capture: true }));
+        win.addEventListener("scroll", () => sendScroll(), { passive: true });
         d.scrollTop = scroll * (d.scrollHeight - d.clientHeight);
       } catch { /* */ }
     };
@@ -108,16 +111,62 @@ async function show(msg) {
   }
   label();
   if (!st.fitted || firstOfKind) { st.fitted = true; fitWindow(); }
+  if (st.pendingScroll) { const m = st.pendingScroll; st.pendingScroll = null; applyScroll(m); }
 }
 
-function sendScroll(ratio) {
-  if (performance.now() < st.ignoreScroll) return;
-  bus.postMessage({ type: "popup-scroll", ratio });
+/** Dvojice [riadok zdroja, y v okne]: PDF podľa nájdeného textu, HTML podľa značiek riadkov. */
+function linePairs() {
+  let scroller, max, found = [];
+  if (st.kind === "pdf") {
+    scroller = $("#pw-pdf");
+    max = Math.max(1, scroller.scrollHeight - scroller.clientHeight);
+    found = pdf.linePairs(st.anchors, st.anchorsKey) || [];
+  } else {
+    let d;
+    try { d = $("#pw-frame").contentDocument; } catch { return null; }
+    if (!d || !d.documentElement) return null;
+    const win = d.defaultView;
+    max = Math.max(1, d.documentElement.scrollHeight - win.innerHeight);
+    found = [...d.querySelectorAll("[data-line]")].map((el) =>
+      [parseInt(el.getAttribute("data-line"), 10), el.getBoundingClientRect().top + win.scrollY]);
+  }
+  const pairs = [[0, 0]];
+  for (const [line, y] of found) {
+    const [pl, py] = pairs[pairs.length - 1];
+    if (line > pl && y > py && line < st.lines && y < max) pairs.push([line, y]);
+  }
+  pairs.push([Math.max(1, st.lines - 1), max]);
+  return pairs;
 }
-function applyScroll(ratio) {
+function scrollTopNow() {
+  if (st.kind === "pdf") return $("#pw-pdf").scrollTop;
+  try { return $("#pw-frame").contentDocument.documentElement.scrollTop; } catch { return 0; }
+}
+function setScrollTop(y) {
+  if (st.kind === "pdf") { $("#pw-pdf").scrollTop = y; return; }
+  try { $("#pw-frame").contentDocument.documentElement.scrollTop = y; } catch { /* */ }
+}
+// Posun hlásime hlavnému oknu iba pri posune používateľom (koliesko, myš, klávesy),
+// nie pri programovom posune ani pri prekreslení strán – inak vzniká spätná slučka.
+let userUntil = 0;
+const markUser = () => { userUntil = performance.now() + 800; };
+["wheel", "pointerdown", "keydown", "touchstart"].forEach((ev) =>
+  window.addEventListener(ev, markUser, { passive: true, capture: true }));
+function sendScroll() {
+  if (performance.now() > userUntil || performance.now() < st.ignoreScroll) return;
+  const pairs = linePairs();
+  const line = pairs && interpPairs(scrollTopNow(), pairs, 1, 0);
+  if (Number.isFinite(line)) bus.postMessage({ type: "popup-scroll", line });
+}
+function applyScroll(m) {
+  if (st.kind === "pdf" && pdf.loading) { st.pendingScroll = m; return; } // po načítaní
+  const pairs = linePairs();
+  if (!pairs) return;
+  const y = m.atEnd ? pairs[pairs.length - 1][1] : interpPairs(m.line, pairs, 0, 1);
+  if (!Number.isFinite(y)) return;
   st.ignoreScroll = performance.now() + 150;
-  if (st.kind === "pdf") { const el = $("#pw-pdf"); el.scrollTop = ratio * (el.scrollHeight - el.clientHeight); return; }
-  try { const d = $("#pw-frame").contentDocument.documentElement; d.scrollTop = ratio * (d.scrollHeight - d.clientHeight); } catch { /* */ }
+  userUntil = 0;
+  setScrollTop(y);
 }
 
 bus.onmessage = (e) => {
@@ -127,14 +176,11 @@ bus.onmessage = (e) => {
   else if (m.type === "error") showError(m.text);
   else if (m.type === "busy") $("#pw-busy").hidden = !m.on;
   else if (m.type === "title") { $("#pw-title").textContent = m.text || "Náhľad"; document.title = (m.text ? m.text.split("/").pop() + " – " : "") + "Náhľad"; }
-  else if (m.type === "scroll") applyScroll(m.ratio);
+  else if (m.type === "scroll") applyScroll(m);
   else if (m.type === "close-popup") window.close();
 };
 
-$("#pw-pdf").addEventListener("scroll", () => {
-  const el = $("#pw-pdf");
-  sendScroll(el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight));
-}, { passive: true });
+$("#pw-pdf").addEventListener("scroll", () => sendScroll(), { passive: true });
 $("#pw-pdf").addEventListener("wheel", wheel, { passive: false });
 $("#pw-in").addEventListener("click", () => step(1));
 $("#pw-out").addEventListener("click", () => step(-1));

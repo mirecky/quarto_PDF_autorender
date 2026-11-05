@@ -609,7 +609,11 @@ pdfView.el.addEventListener("wheel", zoomWheel, { passive: false });
 /** Po načítaní HTML náhľadu: zoom a Ctrl + koliesko aj vnútri rámca. */
 function hookFrameZoom() {
   applyFrameZoom();
-  try { $("#preview-frame").contentWindow.addEventListener("wheel", zoomWheel, { passive: false }); } catch { /* ignorovať */ }
+  try {
+    const win = $("#preview-frame").contentWindow;
+    win.addEventListener("wheel", zoomWheel, { passive: false });
+    ["wheel", "pointerdown", "keydown", "touchstart"].forEach((ev) => win.addEventListener(ev, markPreviewUser, { passive: true, capture: true }));
+  } catch { /* ignorovať */ }
 }
 
 async function localPdfPreview(url) {
@@ -638,6 +642,7 @@ function publish(msg) {
 }
 /** Zobrazí náhľad: v samostatnom okne, ak je otvorené, inak v paneli. */
 function present(msg) {
+  if (editor.cm()) { const a = currentAnchors(); msg.anchors = a.list; msg.anchorsKey = a.key; msg.lines = editor.cm().lineCount(); }
   publish(msg);
   if (popupOpen()) return;
   return renderLocal(msg);
@@ -689,16 +694,16 @@ if (bus) bus.onmessage = (e) => {
   } else if (m.type === "popup-closing") {
     setPopupState(false);
   } else if (m.type === "popup-scroll" && syncOn() && editor.cm()) {
-    const cm = editor.cm(), info = cm.getScrollInfo();
     syncState.ignore.editor = performance.now() + 150;
-    cm.scrollTo(null, m.ratio * Math.max(0, info.height - info.clientHeight));
+    scrollEditorToLine(m.line);
   }
 };
 function publishScroll() {
   if (!popupOpen() || !syncOn() || !editor.cm()) return;
   if (performance.now() < syncState.ignore.editor) return;
   const info = editor.cm().getScrollInfo();
-  publish({ type: "scroll", ratio: info.top / Math.max(1, info.height - info.clientHeight) });
+  publish({ type: "scroll", line: editorTopLine(), lines: editor.cm().lineCount(),
+    atEnd: info.top >= info.height - info.clientHeight - 2 });
 }
 editor.onScroll(() => publishScroll());
 $("#btn-popup").addEventListener("click", () => (popupOpen() ? popup.win.focus() : openPopup()));
@@ -711,12 +716,40 @@ const syncState = { ignore: { editor: 0, preview: 0 }, raf: 0, pending: null };
 
 /** Dvojice [y v editore, y v náhľade] z neviditeľných značiek data-line (+ začiatok a koniec). */
 const pdfActive = () => !pdfView.el.hidden;
+/** Kotvy zdrojového textu pre párovanie s PDF – prepočítajú sa iba po zmene textu. */
+const anchorsCache = { key: null, list: [] };
+function currentAnchors() {
+  const key = (state.path || "") + "#" + state.version;
+  if (anchorsCache.key !== key) Object.assign(anchorsCache, { key, list: sourceAnchors(editor.get()) });
+  return anchorsCache;
+}
+/** Zlomkové číslo riadku na vrchu editora (napr. 41.3). */
+function editorTopLine() {
+  const cm = editor.cm(), top = cm.getScrollInfo().top;
+  const l = cm.lineAtHeight(top, "local");
+  const h0 = cm.heightAtLine(l, "local"), h1 = l < cm.lastLine() ? cm.heightAtLine(l + 1, "local") : h0 + 1;
+  return l + Math.min(1, Math.max(0, (top - h0) / Math.max(1, h1 - h0)));
+}
+function scrollEditorToLine(line) {
+  const cm = editor.cm(), l = Math.max(0, Math.min(cm.lastLine(), Math.floor(line)));
+  const h0 = cm.heightAtLine(l, "local"), h1 = l < cm.lastLine() ? cm.heightAtLine(l + 1, "local") : h0;
+  cm.scrollTo(null, h0 + (line - l) * (h1 - h0));
+}
 function scrollPairs() {
   const cm = editor.cm();
-  if (cm && pdfActive()) { // PDF nemá značky riadkov → pomerné posúvanie
+  if (cm && pdfActive()) { // PDF: dvojice podľa textu nájdeného v PDF (inak pomerne)
     const info = cm.getScrollInfo();
-    return [[0, 0], [Math.max(1, info.height - info.clientHeight),
-      Math.max(1, pdfView.el.scrollHeight - pdfView.el.clientHeight)]];
+    const eMax = Math.max(1, info.height - info.clientHeight);
+    const pMax = Math.max(1, pdfView.el.scrollHeight - pdfView.el.clientHeight);
+    const pairs = [[0, 0]];
+    const a = currentAnchors();
+    for (const [line, y] of pdfView.linePairs(a.list, a.key) || []) {
+      const e = cm.heightAtLine(line, "local");
+      const [pe, pp] = pairs[pairs.length - 1];
+      if (e > pe && y > pp && e < eMax && y < pMax) pairs.push([e, y]);
+    }
+    pairs.push([eMax, pMax]);
+    return pairs;
   }
   const doc = $("#preview-frame").contentDocument;
   if (!cm || !doc || !doc.documentElement) return null;
@@ -747,9 +780,15 @@ function interpolate(x, pairs, from, to) {
   }
   return pairs[pairs.length - 1][to];
 }
+// Náhľad posúva editor iba pri posune používateľom (nie pri obnovení náhľadu počas písania).
+let previewUserUntil = 0;
+const markPreviewUser = () => { previewUserUntil = performance.now() + 800; };
+["wheel", "pointerdown", "keydown", "touchstart"].forEach((ev) =>
+  $("#tab-preview").addEventListener(ev, markPreviewUser, { passive: true, capture: true }));
 /** source = "editor" | "preview": strana, ktorú posunul používateľ. */
 function syncScroll(source, now = false) {
   if (!syncOn() || !editor.cm()) return;
+  if (source === "preview" && !now && performance.now() > previewUserUntil) return;
   if (!now && performance.now() < syncState.ignore[source]) return; // náš vlastný posun
   syncState.pending = source;
   if (syncState.raf && !now) return;
