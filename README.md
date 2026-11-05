@@ -173,6 +173,7 @@ vyrenderuje všetky formáty uvedené v dokumente.
 | `Ctrl+B` / `Ctrl+I` | tučné / kurzíva |
 | `Ctrl+F` | hľadať v dokumente |
 | `Ctrl+Shift+P` | obnoviť náhľad |
+| `Ctrl+\` | skryť/zobraziť strom súborov (aj tlačidlo ☰ nad editorom) |
 
 ## Poznámky k implementácii
 
