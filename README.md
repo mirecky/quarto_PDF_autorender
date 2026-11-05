@@ -129,6 +129,9 @@ súbory aj podpriečinky (📁) sa vytvoria v ňom (inak v priečinku otvorenéh
   PDF cez LaTeX alebo Typst, prípadne HTML) vytvorený v dočasnom priečinku. PDF sa
   zobrazuje vstavaným prehliadačom (pdf.js), ktorý pri obnovení zachová pozíciu.
   Formáty, ktoré prehliadač nezobrazí (DOCX, ODT, EPUB…), sa v náhľade nahradia HTML;
+- **zoom**: tlačidlá − / + vpravo hore v paneli náhľadu alebo `Ctrl` + koliesko myši nad
+  náhľadom (50–300 %, 100 % = na šírku panela; kliknutím na percentá späť na 100 %).
+  PDF sa pri zmene prekreslí ostro a pozícia v dokumente sa zachová; zoom sa pamätá;
 - *rýchly (HTML)* – okamžitý náhľad cez Pandoc bez vykonávania kódu; Quarto-špecifické
   prvky (callouty, krížové odkazy) sa nespracujú.
 
