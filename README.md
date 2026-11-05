@@ -141,9 +141,12 @@ súbory aj podpriečinky (📁) sa vytvoria v ňom (inak v priečinku otvorenéh
 - *rýchly (HTML)* – okamžitý náhľad cez Pandoc bez vykonávania kódu; Quarto-špecifické
   prvky (callouty, krížové odkazy) sa nespracujú.
 
-**Synchronizované posúvanie.** Editor a náhľad sa posúvajú spolu v oboch smeroch.
-Do náhľadu sa pred každý blok textu vkladajú neviditeľné značky s číslom riadku zdroja,
-takže zhoda je presná na úrovni odsekov a nadpisov (vypínateľné voľbou *synchr. posúvanie*).
+**Synchronizované posúvanie.** Editor a náhľad sa posúvajú spolu v oboch smeroch
+(vypínateľné voľbou *synchr. posúvanie*). V HTML náhľade sa pred každý blok textu vkladajú
+neviditeľné značky s číslom riadku zdroja; v PDF náhľade aplikácia číta text PDF a páruje
+začiatky nadpisov, odsekov, položiek zoznamu a riadkov tabuliek so zdrojom, takže zhoda je
+na úrovni riadkov aj pri zlomoch strán. Náhľad posúva editor iba pri posune používateľom,
+nie pri obnovení počas písania.
 
 **Autoukladanie.** Súbor sa uloží 1,5 s po poslednej zmene, ako aj pri prepnutí súboru,
 priečinka alebo opustení okna. 
