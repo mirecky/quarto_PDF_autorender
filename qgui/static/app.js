@@ -1063,12 +1063,27 @@ $$(".gutter").forEach((g) => {
   });
 });
 
+/* ------------------------------------------------------------------ skrytie stromu súborov */
+function setSidebar(hidden) {
+  document.body.classList.toggle("sidebar-hidden", hidden);
+  store.set("sidebarHidden", hidden);
+  $("#btn-sidebar").title = (hidden ? "Zobraziť" : "Skryť") + " súbory (Ctrl+\\)";
+  editor.refresh();
+  clearTimeout(reflowTimer);
+  reflowTimer = setTimeout(() => pdfView.reflow(), 200); // panel náhľadu zmenil šírku
+}
+$("#btn-sidebar").addEventListener("click", () => setSidebar(!document.body.classList.contains("sidebar-hidden")));
+setSidebar(!!store.get("sidebarHidden", false));
+
 /* ------------------------------------------------------------------ klávesové skratky */
 document.addEventListener("keydown", (e) => {
   const mod = e.ctrlKey || e.metaKey;
   if (!mod) return;
   const k = e.key.toLowerCase();
   if (k === "s") { e.preventDefault(); save(); }
+  else if (e.key === "\\" || e.code === "Backslash") {
+    e.preventDefault(); setSidebar(!document.body.classList.contains("sidebar-hidden"));
+  }
   else if (k === "enter") { e.preventDefault(); doRender(); }
   else if (k === "b" && state.path) { e.preventDefault(); const r = FMT.bold(); editor.replace(r.text, r.from, r.to); }
   else if (k === "i" && state.path) { e.preventDefault(); const r = FMT.italic(); editor.replace(r.text, r.from, r.to); }

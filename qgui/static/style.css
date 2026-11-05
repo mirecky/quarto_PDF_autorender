@@ -166,3 +166,10 @@ dialog::backdrop { background: rgba(0, 0, 0, .35); }
 .zoom-ctl button:hover { background: var(--panel); }
 #zoom-reset { min-width: 52px; font-variant-numeric: tabular-nums; color: var(--muted); }
 #btn-popup.on { color: var(--accent); font-weight: 700; }
+
+/* skrytý strom súborov */
+body.sidebar-hidden #sidebar, body.sidebar-hidden .gutter[data-target="sidebar"] { display: none; }
+#btn-sidebar { font-size: 16px; padding: 0 6px; margin-right: 4px; }
+body.sidebar-hidden #btn-sidebar { color: var(--accent); }
+#editor-pane > .pane-head { justify-content: flex-start; }
+#editor-pane > .pane-head .fmt-bar { margin-left: auto; }
