@@ -172,4 +172,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden .gutter[data-target="sidebar"]
 #btn-sidebar { font-size: 16px; padding: 0 6px; margin-right: 4px; }
 body.sidebar-hidden #btn-sidebar { color: var(--accent); }
 #editor-pane > .pane-head { justify-content: flex-start; }
-#editor-pane > .pane-head .fmt-bar { margin-left: auto; }
+
+/* formátovacia lišta: vlastný pevný riadok pod názvom súboru */
+.fmt-row { flex: none; padding: 3px 8px; border-bottom: 1px solid var(--border); background: var(--panel2); }
+#current-file { flex: 1; min-width: 0; }
