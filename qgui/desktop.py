@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import threading
 from pathlib import Path
 
@@ -56,8 +58,41 @@ def forget_folder(folder: str) -> None:
     save_config(cfg)
 
 
+def _applescript_str(s: str) -> str:
+    return '"' + str(s).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _pick_folder_macos(start: Path) -> str | None:
+    """Natívny výber priečinka na macOS (AppleScript) – funguje z ľubovoľného vlákna,
+    na rozdiel od tkinteru, ktorý na macOS smie bežať iba v hlavnom vlákne."""
+    script = ("activate\n"
+              f"set f to choose folder with prompt {_applescript_str('Quarto Studio – vyber priečinok s dokumentmi')}"
+              f" default location (POSIX file {_applescript_str(start)})\n"
+              "POSIX path of f")
+    try:
+        r = subprocess.run(["osascript", "-e", script], capture_output=True, text=True, timeout=600)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    chosen = r.stdout.strip().rstrip("/")
+    if r.returncode != 0 or not chosen:  # zrušené (Cancel) alebo chyba
+        return None
+    return chosen
+
+
+def show_message_macos(text: str, error: bool = True) -> None:
+    script = (f"display dialog {_applescript_str(text)} with title {_applescript_str('Quarto Studio')}"
+              f" buttons {{\"OK\"}} default button 1 with icon {'stop' if error else 'note'}")
+    try:
+        subprocess.run(["osascript", "-e", script], capture_output=True, timeout=600)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
 def pick_folder(initial: str | Path | None = None) -> str | None:
-    """Grafický výber priečinka (tkinter). Vráti None pri zrušení alebo nedostupnom GUI."""
+    """Grafický výber priečinka (macOS: AppleScript, inak tkinter). None pri zrušení."""
+    if sys.platform == "darwin":
+        start = Path(initial) if initial else Path.home() / "Documents"
+        return _pick_folder_macos(start if start.is_dir() else Path.home())
     try:
         import tkinter as tk
         from tkinter import filedialog
