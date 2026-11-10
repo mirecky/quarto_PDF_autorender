@@ -448,7 +448,7 @@ const previewMode = () => $("#preview-mode").value;
 function schedulePreview(delay) {
   clearTimeout(state.previewTimer);
   if (!$("#live-preview").checked || !state.path || !DOC_EXT.test(state.path)) return;
-  if (delay === undefined) delay = previewMode() === "real" ? 1200 : 600;
+  if (delay === undefined) delay = previewMode() === "real" ? 800 : 500;
   state.previewTimer = setTimeout(doPreview, delay);
 }
 function previewError(msg) {
@@ -511,6 +511,10 @@ async function doRealPreview() {
       "\n\nCelý výpis: záložka Log.");
   }
   previewError(null);
+  // čas náhľadu: na porovnanie počítačov a PDF motorov (lualatex je najpomalší)
+  if (r.seconds) status(`Náhľad za ${String(r.seconds.toFixed(1)).replace(".", ",")} s` +
+    (r.engine ? ` (${r.engine})` : "") + (r.engine === "lualatex" && r.seconds > 2.5
+      ? " – rýchlejší je xelatex alebo typst (⚙ Nastavenia → PDF motor)" : ""));
   if (r.note) status(r.note);
   if (state.project && state.dirty) status("Náhľad projektu zobrazuje uloženú verziu súboru (Ctrl+S).");
   if (r.kind === "pdf") await showPdfPreview(r.url + "?v=" + Date.now());

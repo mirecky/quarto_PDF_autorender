@@ -8,6 +8,7 @@ import shlex
 import shutil
 import sys
 import subprocess
+import logging
 import tempfile
 import time
 from pathlib import Path
@@ -632,8 +633,11 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     if not res["ok"] or not out:
         log = res.get("log", "") or "Náhľad sa nepodarilo vytvoriť."
         return {"ok": False, "log": log, "note": note, **diagnose(log)}
-    result = {"ok": True, "kind": "html" if is_html else "pdf", "file": out.name,
-              "seconds": res.get("seconds"), "note": note, "log": res.get("log", "")}
+    engine = "" if is_html else (s.get("pdf_engine") or ("typst" if fmt == "typst" else "LaTeX"))
+    logging.getLogger("qgui").info("náhľad %s (%s%s): %.2f s", src.name, fmt,
+                                   f", {engine}" if engine else "", res.get("seconds") or 0)
+    result = {"ok": True, "kind": "html" if is_html else "pdf", "file": out.name, "format": fmt,
+              "engine": engine, "seconds": res.get("seconds"), "note": note, "log": res.get("log", "")}
     if is_html:
         result["html"] = out.read_text(encoding="utf-8", errors="replace")
     return result
