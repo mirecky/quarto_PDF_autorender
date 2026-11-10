@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import re
 import shlex
 import shutil
@@ -94,7 +95,29 @@ def _which(name: str) -> str | None:
     env = os.environ.get("QGUI_" + name.upper())
     if env and Path(env).exists():
         return env
-    return shutil.which(name) or shutil.which(name, path=os.pathsep.join(_EXTRA_PATHS))
+    found = shutil.which(name) or shutil.which(name, path=os.pathsep.join(_EXTRA_PATHS))
+    if found or name == "quarto":
+        return found
+    return _bundled_tool(name)
+
+
+def _bundled_tool(name: str) -> str | None:
+    """Pandoc a Typst, ktoré sú súčasťou Quarta (quarto/bin/tools[/<arch>]/…).
+
+    Na macOS inštalátor Quarta nepridá samostatný pandoc do PATH – bez tohto by
+    rýchly HTML náhľad hlásil, že Pandoc chýba, hoci je nainštalovaný s Quartom.
+    """
+    quarto = _which("quarto")
+    if not quarto:
+        return None
+    tools = Path(quarto).resolve().parent / "tools"
+    machine = platform.machine().lower()
+    arch = "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
+    exe = name + (".exe" if sys.platform == "win32" else "")
+    for cand in (tools / exe, tools / arch / exe, tools / "x86_64" / exe, tools / name / exe):
+        if cand.is_file():
+            return str(cand)
+    return None
 
 
 def tool_versions() -> dict:
@@ -585,7 +608,7 @@ PREVIEWABLE = {"pdf", "beamer", "typst", "html", "revealjs", "dashboard"}
 HTML_FORMATS = {"html", "revealjs", "dashboard"}
 
 
-def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict:
+def preview_real(src: Path, content: str, settings: dict, out_dir: Path, fast: bool = False) -> dict:
     """Skutočný náhľad podľa profilu (PDF/HTML) do dočasného priečinka out_dir.
 
     Výstup sa nezapisuje do priečinka používateľa: zdroj sa dočasne uloží ako skrytý
@@ -602,8 +625,14 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     if fmt not in PREVIEWABLE:
         note = f"Formát „{fmt}“ sa nedá zobraziť v prehliadači – náhľad je v HTML."
         fmt = "html"
+    if fast and fmt == "pdf":
+        # Rýchly PDF náhľad: Typst namiesto LaTeXu (~1 s). Vzhľad sa môže mierne líšiť,
+        # finálne PDF podľa profilu vznikne až po ▶ Renderovať.
+        fmt, s["pdf_engine"] = "typst", ""
+        if _which("quarto"):
+            s["engine"] = "quarto"
     if s["engine"] == "pandoc" and fmt == "typst":
-        fmt, s["pdf_engine"] = "pdf", "typst"
+        fmt, s["pdf_engine"] = "pdf", _which("typst") or "typst"
     is_html = fmt in HTML_FORMATS
     s["format"] = fmt
     s["output_dir"] = str(out_dir)
@@ -633,7 +662,8 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     if not res["ok"] or not out:
         log = res.get("log", "") or "Náhľad sa nepodarilo vytvoriť."
         return {"ok": False, "log": log, "note": note, **diagnose(log)}
-    engine = "" if is_html else (s.get("pdf_engine") or ("typst" if fmt == "typst" else "LaTeX"))
+    engine = "" if is_html else ("typst" if fmt == "typst" or "typst" in Path(s.get("pdf_engine") or "x").name
+                                 else s.get("pdf_engine") or "LaTeX")
     logging.getLogger("qgui").info("náhľad %s (%s%s): %.2f s", src.name, fmt,
                                    f", {engine}" if engine else "", res.get("seconds") or 0)
     result = {"ok": True, "kind": "html" if is_html else "pdf", "file": out.name, "format": fmt,

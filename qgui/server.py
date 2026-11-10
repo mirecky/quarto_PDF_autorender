@@ -362,7 +362,7 @@ class Handler(BaseHTTPRequestHandler):
                 if data.get("mode") == "real":
                     with ws.preview_lock:  # naraz najviac jeden reálny náhľad
                         res = R.preview_real(p, data.get("content", ""), data.get("settings") or {},
-                                             ws.preview_dir)
+                                             ws.preview_dir, fast=bool(data.get("fast")))
                     if res.get("kind") == "pdf":
                         res["url"] = "/preview-out/" + urllib.parse.quote(res["file"])
                 else:

@@ -167,6 +167,9 @@ súbory aj podpriečinky (📁) sa vytvoria v ňom (inak v priečinku otvorenéh
   najviac po šírku obrazovky (⤢ okno znova prispôsobí). *⇤ Späť do aplikácie* alebo zatvorenie
   okna vráti náhľad do panela. Ak prehliadač otvorí okno ako kartu, zoom funguje, len sa
   nemení veľkosť okna;
+- *rýchly PDF (Typst)* – ako reálny, ale PDF profilu sa v náhľade vysádza Typstom (súčasť
+  Quarta) namiesto LaTeXu: ~1 s namiesto 3–5 s. Vzhľad sa môže mierne líšiť (písmo, okraje);
+  ▶ Renderovať vždy použije motor z profilu (napr. lualatex);
 - *rýchly (HTML)* – okamžitý náhľad cez Pandoc bez vykonávania kódu; Quarto-špecifické
   prvky (callouty, krížové odkazy) sa nespracujú.
 
