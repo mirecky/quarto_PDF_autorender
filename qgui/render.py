@@ -316,7 +316,8 @@ def _move(p: Path, target_dir: Path) -> Path:
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-_KEY_LINE_RE = re.compile(r"(FATAL|ERROR|Error|error:|Traceback|^! |ModuleNotFoundError|not found)", re.M)
+_KEY_LINE_RE = re.compile(r"(FATAL|ERROR|Error|error:|Traceback|^! |ModuleNotFoundError|not found"
+                          r"|finding package for|[Mm]issing package)", re.M)
 _HINTS = [
     (re.compile(r"rsvg-convert", re.I),
      "Obrázok je vo formáte SVG a LaTeX (PDF) ho bez programu rsvg-convert nevie vložiť. "
@@ -328,6 +329,11 @@ _HINTS = [
      "Na spúšťanie Python blokov treba Jupyter: py -m pip install jupyter"),
     (re.compile(r"LaTeX Error: File `([^']+)' not found"),
      "LaTeX nemá balík „{0}“. Spusti: quarto install tinytex --update-path, prípadne tlmgr install <balík>."),
+    (re.compile(r"missing packages \(automatic installation failed\)", re.I),
+     "LaTeX potrebuje balíky, ktoré sa nepodarilo automaticky doinštalovať (názvy sú v riadkoch "
+     "„finding package for …“ v záložke Log). V Termináli/PowerShelli spusti: "
+     "quarto install tinytex --update-path  a potom  tlmgr update --self --all  a render zopakuj. "
+     "Konkrétny balík doinštaluješ príkazom  tlmgr install <balík>."),
     (re.compile(r"(xelatex|lualatex|pdflatex)[^\n]*(not found|No such file)", re.I),
      "Nenašiel sa LaTeX. Nainštaluj ho: quarto install tinytex"),
 ]

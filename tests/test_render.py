@@ -165,3 +165,12 @@ class DiagnoseTest(unittest.TestCase):
         self.assertTrue(any("rsvg-convert" in h for h in d["hints"]))
         self.assertTrue(any("pip install schemdraw" in h for h in d["hints"]))
         self.assertEqual(R.diagnose("Output created: x.pdf")["hints"], [])
+
+
+class DiagnoseLatexPackagesTest(unittest.TestCase):
+    def test_missing_packages_hint_and_lines(self):
+        log = ("updating tlmgr\nfinding package for babel-slovak.ldf\nfinding package for hyphen-slovak\n"
+               "ERROR: \ncompilation failed- missing packages (automatic installation failed)\n")
+        d = R.diagnose(log)
+        self.assertTrue(any("tlmgr" in h for h in d["hints"]))
+        self.assertIn("finding package for babel-slovak.ldf", d["key_lines"])
