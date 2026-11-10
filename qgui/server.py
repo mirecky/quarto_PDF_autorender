@@ -117,7 +117,8 @@ class Workspace:
         except OSError:
             return items
         for p in entries:
-            if p.name.startswith(".") or p.name in SKIP_DIRS or p.name.endswith("_files"):
+            if (p.name.startswith((".", R.PREVIEW_PREFIX)) or p.name in SKIP_DIRS
+                    or p.name.endswith("_files")):
                 continue
             if p.is_dir():
                 if depth < 8:
