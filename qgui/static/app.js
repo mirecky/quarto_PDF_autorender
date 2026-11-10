@@ -445,10 +445,12 @@ $("#btn-save").addEventListener("click", () => save());
 // "real" = skutočný výstup podľa aktívneho profilu (PDF/HTML) do dočasného priečinka,
 // "pandoc" = rýchly HTML náhľad. Súbor do _output vznikne až po ▶ Renderovať.
 const previewMode = () => $("#preview-mode").value;
+// "typst" = ako "real", ale PDF sa v náhľade vysádza Typstom (rýchlo); render ostáva podľa profilu
+const isRealMode = (m = previewMode()) => m === "real" || m === "typst";
 function schedulePreview(delay) {
   clearTimeout(state.previewTimer);
   if (!$("#live-preview").checked || !state.path || !DOC_EXT.test(state.path)) return;
-  if (delay === undefined) delay = previewMode() === "real" ? 800 : 500;
+  if (delay === undefined) delay = previewMode() === "real" ? 800 : 400;
   state.previewTimer = setTimeout(doPreview, delay);
 }
 function previewError(msg) {
@@ -461,7 +463,7 @@ function previewError(msg) {
 $("#preview-error .close").addEventListener("click", () => previewError(null));
 
 async function doPreview() {
-  if (previewMode() === "real") return doRealPreview();
+  if (isRealMode()) return doRealPreview();
   const seq = ++state.previewSeq;
   const r = await api("/api/preview", { path: state.path, content: editor.get(), mode: "pandoc" });
   if (seq !== state.previewSeq || previewMode() !== "pandoc") return; // medzičasom novšia požiadavka
@@ -492,19 +494,20 @@ async function doRealPreview() {
   state.realBusy = true;
   $("#preview-busy").hidden = false;
   publish({ type: "busy", on: true });
-  const path = state.path;
+  const path = state.path, mode = previewMode();
   let r;
   try {
     // Stránka projektu sa renderuje z uloženého súboru (kvôli navigácii a štýlom projektu).
     if (state.project && state.dirty && autosaveOn()) await save({ auto: true });
-    r = await api("/api/preview", { path, content: editor.get(), mode: "real", settings: activeSettings() });
+    r = await api("/api/preview", { path, content: editor.get(), mode: "real", fast: mode === "typst",
+      settings: activeSettings() });
   } finally {
     state.realBusy = false;
     $("#preview-busy").hidden = true;
     publish({ type: "busy", on: false });
   }
   if (state.realPending) { state.realPending = false; schedulePreview(150); }
-  if (path !== state.path || previewMode() !== "real") return;
+  if (path !== state.path || previewMode() !== mode) return;
   if (!r.ok) {
     logPreviewFailure(r);
     return previewError(describeFailure(r, "Náhľad zlyhal (posledný úspešný zostáva zobrazený)") +
@@ -514,7 +517,7 @@ async function doRealPreview() {
   // čas náhľadu: na porovnanie počítačov a PDF motorov (lualatex je najpomalší)
   if (r.seconds) status(`Náhľad za ${String(r.seconds.toFixed(1)).replace(".", ",")} s` +
     (r.engine ? ` (${r.engine})` : "") + (r.engine === "lualatex" && r.seconds > 2.5
-      ? " – rýchlejší je xelatex alebo typst (⚙ Nastavenia → PDF motor)" : ""));
+      ? " – rýchlejšie: náhľad „rýchly PDF (Typst)“ alebo motor xelatex" : ""));
   if (r.note) status(r.note);
   if (state.project && state.dirty) status("Náhľad projektu zobrazuje uloženú verziu súboru (Ctrl+S).");
   if (r.kind === "pdf") await showPdfPreview(r.url + "?v=" + Date.now());
@@ -973,7 +976,7 @@ async function loadSettings() {
   if (ui.autoSave !== undefined) $("#auto-save").checked = ui.autoSave;
   if (ui.syncScroll !== undefined) $("#sync-scroll").checked = ui.syncScroll;
   // v2: reálny náhľad je predvolený; staršie uložené voľby (rýchly/Quarto HTML) sa neprenášajú
-  if (ui.previewModeV === 2 && ["real", "pandoc"].includes(ui.previewMode)) $("#preview-mode").value = ui.previewMode;
+  if (ui.previewModeV === 2 && ["real", "typst", "pandoc"].includes(ui.previewMode)) $("#preview-mode").value = ui.previewMode;
   fillProfileSelects();
 }
 function fillProfileSelects() {

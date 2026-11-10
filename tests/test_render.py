@@ -227,3 +227,37 @@ class PreviewSymlinkedTempTest(unittest.TestCase):
                 r = R.preview_real(src, "# A\n", {"format": "pdf"}, link / "out")
             self.assertTrue(r["ok"], r)
             self.assertEqual(r["kind"], "pdf")
+
+
+class FastPreviewTest(unittest.TestCase):
+    def test_fast_switches_pdf_to_typst(self):
+        from unittest import mock
+        seen = {}
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "a.qmd"
+            src.write_text("# A\n", encoding="utf-8")
+            out_dir = Path(d) / "out"
+
+            def fake_render(tmp, s):
+                seen.update(s)
+                out = out_dir.resolve() / (tmp.stem + ".pdf")
+                out.write_bytes(b"%PDF")
+                return {"ok": True, "log": "", "outputs": [str(out)], "seconds": 0.9}
+            with mock.patch.object(R, "render", fake_render):
+                r = R.preview_real(src, "# A\n", {"format": "pdf", "pdf_engine": "lualatex"}, out_dir, fast=True)
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(seen["format"], "typst")
+            self.assertEqual(seen["pdf_engine"], "")
+            self.assertEqual(r["engine"], "typst")
+
+    def test_bundled_pandoc_from_quarto(self):
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            bin_ = Path(d) / "bin"
+            (bin_ / "tools" / "x86_64").mkdir(parents=True)
+            exe = "pandoc.exe" if R.sys.platform == "win32" else "pandoc"
+            (bin_ / "tools" / "x86_64" / exe).write_text("")
+            with mock.patch.object(R, "_which", lambda n: str(bin_ / "quarto") if n == "quarto" else None), \
+                 mock.patch.object(R.platform, "machine", lambda: "x86_64"):
+                self.assertEqual(R._bundled_tool("pandoc"), str(bin_ / "tools" / "x86_64" / exe))
+
