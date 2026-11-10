@@ -64,7 +64,7 @@ class Workspace:
         self._guard = threading.Lock()
         self.pending: dict | None = None  # súbor na otvorenie z Prieskumníka
         # Dočasný priečinok pre reálny náhľad (mimo priečinka používateľa).
-        self.preview_dir = Path(tempfile.mkdtemp(prefix="qgui-preview-"))
+        self.preview_dir = Path(tempfile.mkdtemp(prefix="qgui-preview-")).resolve()  # macOS: /var → /private/var
         self.preview_lock = threading.Lock()
 
     # --- otvorenie súboru zvonka (dvojklik v Prieskumníkovi)
