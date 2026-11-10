@@ -76,6 +76,16 @@ potvrdiť: pravé tlačidlo na súbor → *Otvoriť pomocou* → *Vybrať inú a
 inštancia s presne týmto priečinkom, použije sa, inak sa spustí nová.
 Registráciu zruší parameter `-Remove`.
 
+**macOS – všetko naraz (odporúčané):** v Termináli spusti
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mirecky/quarto_PDF_autorender/main/nainstaluj-mac.sh | bash
+```
+
+Skript zistí, čo chýba, a doinštaluje to: Xcode Command Line Tools (git, python3), Quarto,
+TinyTeX, stiahne Quarto Studio do `~/quarto_PDF_autorender` a vytvorí aplikáciu. Opakované
+spustenie Quarto Studio aktualizuje.
+
 **macOS – aplikácia do Docku a predvolená aplikácia pre .md/.qmd:**
 
 Predpoklady: [Quarto](https://quarto.org/docs/get-started/) (balík `.pkg`), Python 3.9+
