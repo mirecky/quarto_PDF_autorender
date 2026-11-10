@@ -209,3 +209,21 @@ class PreviewTempNameTest(unittest.TestCase):
                 os.utime(f, (time.time() - 3600, time.time() - 3600))
             R._sweep_stale_previews(Path(d))
             self.assertEqual([f.name for f in Path(d).iterdir()], [fresh.name])  # čerstvý (beží) ostáva
+
+
+class PreviewSymlinkedTempTest(unittest.TestCase):
+    def test_output_found_when_temp_dir_is_symlink(self):
+        """macOS: tempfile vracia /var/folders/…, čo je odkaz na /private/var/folders/…."""
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as d:
+            real = Path(d) / "private_var"; (real / "out").mkdir(parents=True)
+            link = Path(d) / "var"; link.symlink_to(real)
+            src = Path(d) / "a.qmd"; src.write_text("# A\n")
+            def fake_render(tmp, s):
+                out = Path(s["output_dir"]).resolve() / (tmp.stem + ".pdf")   # render pracuje s resolve()
+                out.write_bytes(b"%PDF")
+                return {"ok": True, "log": "", "outputs": [str(out)]}
+            with mock.patch.object(R, "render", fake_render):
+                r = R.preview_real(src, "# A\n", {"format": "pdf"}, link / "out")
+            self.assertTrue(r["ok"], r)
+            self.assertEqual(r["kind"], "pdf")

@@ -593,6 +593,9 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     v náhľade nahradia HTML.
     """
     s = merged(settings)
+    # Skutočná cesta: na macOS je dočasný priečinok /var/… odkazom na /private/var/… a výstupy
+    # sa porovnávajú s vyriešenými cestami – bez resolve() by sa hotové PDF „nenašlo“.
+    out_dir = Path(out_dir).resolve()
     fmt = effective_format(src, (s["format"] or "").strip(), content) or _yaml_first_format(content) or "html"
     note = ""
     if fmt not in PREVIEWABLE:
@@ -623,7 +626,7 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     finally:
         for leftover in src.parent.glob(tmp.stem + "*"):  # .tex, _files, .log …
             shutil.rmtree(leftover, ignore_errors=True) if leftover.is_dir() else leftover.unlink(missing_ok=True)
-    outputs = [Path(o) for o in res.get("outputs", []) if Path(o).parent == out_dir]
+    outputs = [Path(o) for o in res.get("outputs", []) if Path(o).resolve().parent == out_dir]
     want = (".html",) if is_html else (".pdf",)
     out = next((o for o in outputs if o.suffix.lower() in want), None)
     if not res["ok"] or not out:
