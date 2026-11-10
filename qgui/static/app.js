@@ -465,11 +465,19 @@ async function doPreview() {
   const seq = ++state.previewSeq;
   const r = await api("/api/preview", { path: state.path, content: editor.get(), mode: "pandoc" });
   if (seq !== state.previewSeq || previewMode() !== "pandoc") return; // medzičasom novšia požiadavka
-  if (!r.ok) return previewError(r.log || r.error || "Chyba náhľadu");
+  if (!r.ok) { logPreviewFailure(r); return previewError(r.log || r.error || "Chyba náhľadu"); }
   previewError(null);
   showHtmlPreview(r.html, r.base, true);
 }
 
+/** Zlyhaný náhľad: celý výpis do záložky Log (inak by bol Log prázdny – plní sa pri renderi). */
+function logPreviewFailure(r) {
+  const log = $("#log");
+  log.innerHTML = `<span class="err">${esc(describeFailure(r, "Náhľad zlyhal"))}</span>\n\n` +
+    "────────── celý výpis náhľadu ──────────\n" + esc(r.log || r.error || "(prázdny výpis)");
+  const badge = $("#log-badge");
+  badge.hidden = false; badge.textContent = "!"; badge.className = "badge";
+}
 /** Text chyby: rada po slovensky, podstatné riadky logu, inak jeho koniec. */
 function describeFailure(r, title) {
   const parts = [title + ":"];
@@ -497,7 +505,11 @@ async function doRealPreview() {
   }
   if (state.realPending) { state.realPending = false; schedulePreview(150); }
   if (path !== state.path || previewMode() !== "real") return;
-  if (!r.ok) return previewError(describeFailure(r, "Náhľad zlyhal (posledný úspešný zostáva zobrazený)"));
+  if (!r.ok) {
+    logPreviewFailure(r);
+    return previewError(describeFailure(r, "Náhľad zlyhal (posledný úspešný zostáva zobrazený)") +
+      "\n\nCelý výpis: záložka Log.");
+  }
   previewError(null);
   if (r.note) status(r.note);
   if (state.project && state.dirty) status("Náhľad projektu zobrazuje uloženú verziu súboru (Ctrl+S).");
