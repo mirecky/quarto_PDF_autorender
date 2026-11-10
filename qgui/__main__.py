@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import secrets
 import sys
 import threading
@@ -22,7 +23,8 @@ from . import desktop
 from .server import make_server
 
 LOG_FILE = Path.home() / ".qgui" / "qgui.log"
-WINDOWLESS = sys.stdout is None or sys.stderr is None  # pythonw.exe nemá konzolu
+# pythonw.exe (Windows) nemá konzolu; aplikácia pre macOS nastaví QGUI_BACKGROUND=1
+WINDOWLESS = sys.stdout is None or sys.stderr is None or os.environ.get("QGUI_BACKGROUND") == "1"
 
 
 def _setup_log() -> None:
@@ -36,6 +38,9 @@ def message(text: str, error: bool = True) -> None:
     """Hláška do konzoly; bez konzoly do dialógového okna."""
     print(text, file=sys.stderr)
     if not WINDOWLESS:
+        return
+    if sys.platform == "darwin":
+        desktop.show_message_macos(text, error)
         return
     try:
         import tkinter as tk

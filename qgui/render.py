@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import shutil
+import sys
 import subprocess
 import tempfile
 import time
@@ -77,11 +78,22 @@ def _run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, **kwargs)
 
 
+# Typické umiestnenia mimo PATH: aplikácia spustená z Findera (macOS) má PATH iba
+# /usr/bin:/bin:/usr/sbin:/sbin, takže Quarto, Pandoc ani LaTeX by nenašla.
+_EXTRA_PATHS = [
+    "/Applications/quarto/bin", "/opt/homebrew/bin", "/usr/local/bin", "/Library/TeX/texbin",
+    str(Path.home() / ".local/bin"), str(Path.home() / "Library/TinyTeX/bin/universal-darwin"),
+]
+if sys.platform == "darwin":  # podprocesy (quarto → pandoc, xelatex) potrebujú to isté
+    os.environ["PATH"] = os.pathsep.join(
+        [os.environ.get("PATH", "")] + [p for p in _EXTRA_PATHS if p not in os.environ.get("PATH", "")])
+
+
 def _which(name: str) -> str | None:
     env = os.environ.get("QGUI_" + name.upper())
     if env and Path(env).exists():
         return env
-    return shutil.which(name)
+    return shutil.which(name) or shutil.which(name, path=os.pathsep.join(_EXTRA_PATHS))
 
 
 def tool_versions() -> dict:

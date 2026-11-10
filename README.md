@@ -76,7 +76,26 @@ potvrdiť: pravé tlačidlo na súbor → *Otvoriť pomocou* → *Vybrať inú a
 inštancia s presne týmto priečinkom, použije sa, inak sa spustí nová.
 Registráciu zruší parameter `-Remove`.
 
-**Linux / macOS:**
+**macOS – aplikácia do Docku a predvolená aplikácia pre .md/.qmd:**
+
+Predpoklady: [Quarto](https://quarto.org/docs/get-started/) (balík `.pkg`), Python 3.9+
+([python.org](https://www.python.org/downloads/macos/) alebo `brew install python`) a git
+(`xcode-select --install`). Pre PDF cez LaTeX: `quarto install tinytex`.
+
+```bash
+git clone https://github.com/mirecky/quarto_PDF_autorender.git ~/quarto_PDF_autorender
+cd ~/quarto_PDF_autorender
+./vytvor-mac-aplikaciu.sh            # vytvorí ~/Applications/Quarto Studio.app
+```
+
+Aplikáciu spustíš z Launchpadu alebo Findera a pretiahneš do Docku. Predvolenú aplikáciu
+pre `.md` a `.qmd` nastavíš vo Finderi: súbor → `Cmd+I` → *Otvoriť pomocou* → *Quarto Studio*
+→ *Zmeniť všetko…* (s nainštalovaným `duti` to skript urobí sám). Pri prvom prístupe
+k priečinkom Plocha, Dokumenty či iCloud/MEGA sa macOS opýta na povolenie pre Python –
+treba ho povoliť. Na macOS sa výber priečinka zobrazuje natívnym oknom systému; skratky
+`Ctrl+…` v aplikácii fungujú aj ako `Cmd+…`.
+
+**Linux / macOS (z terminálu):**
 
 ```bash
 ./qgui.sh ~/Dokumenty/praca
