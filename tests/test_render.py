@@ -174,3 +174,38 @@ class DiagnoseLatexPackagesTest(unittest.TestCase):
         d = R.diagnose(log)
         self.assertTrue(any("tlmgr" in h for h in d["hints"]))
         self.assertIn("finding package for babel-slovak.ldf", d["key_lines"])
+
+
+class PreviewTempNameTest(unittest.TestCase):
+    def test_temp_source_name_has_no_leading_dot(self):
+        """TeX Live nezapíše .log/.aux súbory začínajúce bodkou (openout_any = p)."""
+        from unittest import mock
+        seen = {}
+        def fake_render(tmp, s):
+            seen["name"] = tmp.name
+            return {"ok": False, "log": "x", "outputs": []}
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(R, "render", fake_render):
+            src = Path(d) / "a.qmd"
+            src.write_text("# A\n")
+            R.preview_real(src, "# A\n", {"format": "pdf"}, Path(d) / "out")
+            self.assertFalse(seen["name"].startswith("."))
+            self.assertTrue(seen["name"].startswith(R.PREVIEW_PREFIX))
+            self.assertEqual(sorted(x.name for x in Path(d).iterdir()), ["a.qmd", "out"])  # upratané
+
+    def test_tree_hides_preview_temp_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "a.qmd").write_text("x")
+            (Path(d) / (R.PREVIEW_PREFIX + "1-2.qmd")).write_text("x")
+            self.assertEqual([i["name"] for i in Workspace(Path(d)).tree()], ["a.qmd"])
+
+    def test_stale_leftovers_are_swept(self):
+        import os, time
+        with tempfile.TemporaryDirectory() as d:
+            old = [Path(d) / ".qgui-preview-1-2.pdf", Path(d) / (R.PREVIEW_PREFIX + "3-4.tex")]
+            fresh = Path(d) / (R.PREVIEW_PREFIX + "5-6.qmd")
+            for f in old + [fresh]:
+                f.write_text("x")
+            for f in old:
+                os.utime(f, (time.time() - 3600, time.time() - 3600))
+            R._sweep_stale_previews(Path(d))
+            self.assertEqual([f.name for f in Path(d).iterdir()], [fresh.name])  # čerstvý (beží) ostáva

@@ -549,14 +549,35 @@ def _yaml_first_format(content: str) -> str:
     return sub.group(1) if sub else ""
 
 
+# Predpona dočasných súborov náhľadu. Nesmie začínať bodkou: TeX Live (openout_any = p)
+# odmieta zapisovať súbory začínajúce bodkou (.log, .aux) – LaTeX by zlyhal a Quarto by
+# to nahlásilo ako „missing packages“.
+PREVIEW_PREFIX = "qgui-preview-"
+
+
 def _hide(path: Path) -> None:
-    """Na Windows označí súbor ako skrytý (dočasné súbory náhľadu v Prieskumníkovi)."""
-    if os.name == "nt":
-        try:
+    """Skryje dočasný súbor náhľadu v Prieskumníkovi (Windows) / Finderi (macOS)."""
+    try:
+        if os.name == "nt":
             import ctypes
             ctypes.windll.kernel32.SetFileAttributesW(str(path), 0x02)
-        except Exception:
-            pass
+        elif sys.platform == "darwin":
+            subprocess.run(["chflags", "hidden", str(path)], capture_output=True, timeout=5)
+    except Exception:
+        pass
+
+
+def _sweep_stale_previews(folder: Path, older_than: float = 600) -> None:
+    """Zmaže zvyšky náhľadov (napr. po páde aplikácie) staršie ako older_than sekúnd –
+    aj staré pomenovanie s bodkou (.qgui-preview-…)."""
+    limit = time.time() - older_than
+    for pattern in (PREVIEW_PREFIX + "*", "." + PREVIEW_PREFIX + "*"):
+        for f in folder.glob(pattern):
+            try:
+                if f.stat().st_mtime < limit:
+                    shutil.rmtree(f, ignore_errors=True) if f.is_dir() else f.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 PREVIEWABLE = {"pdf", "beamer", "typst", "html", "revealjs", "dashboard"}
@@ -592,7 +613,8 @@ def preview_real(src: Path, content: str, settings: dict, out_dir: Path) -> dict
     for old in out_dir.iterdir():  # ponechať iba posledný náhľad
         shutil.rmtree(old, ignore_errors=True) if old.is_dir() else old.unlink(missing_ok=True)
 
-    tmp = src.parent / f".qgui-preview-{os.getpid()}-{int(time.time() * 1000)}{src.suffix}"
+    _sweep_stale_previews(src.parent)
+    tmp = src.parent / f"{PREVIEW_PREFIX}{os.getpid()}-{int(time.time() * 1000)}{src.suffix}"
     try:
         # značky riadkov iba pre bežné HTML (v prezentácii/dashboarde by menili rozloženie)
         tmp.write_text(add_line_markers(content) if fmt == "html" else content, encoding="utf-8")
