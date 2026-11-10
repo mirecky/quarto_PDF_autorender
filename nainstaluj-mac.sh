@@ -53,7 +53,7 @@ else
   ver="${latest##*/v}"
   case "$ver" in [0-9]*.[0-9]*) ;; *) ver="$QUARTO_FALLBACK" ;; esac
   pkg="$(mktemp -d)/quarto-$ver-macos.pkg"
-  echo "  sťahujem Quarto $ver…"
+  echo "  sťahujem Quarto ${ver}…"
   curl -fL --progress-bar -o "$pkg" "https://github.com/quarto-dev/quarto-cli/releases/download/v$ver/quarto-$ver-macos.pkg"
   echo "  inštalujem (macOS si vypýta heslo správcu)…"
   sudo installer -pkg "$pkg" -target /
